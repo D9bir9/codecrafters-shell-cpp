@@ -93,6 +93,7 @@ int main() {
 
     std::cout << "$ ";
     std::cin >> command;
+    trim_left(command);
 
     std::getline(std::cin, input);
     if (command == "echo") {
