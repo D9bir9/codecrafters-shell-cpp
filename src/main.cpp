@@ -8,7 +8,10 @@ int main() {
 
   // TODO: Uncomment the code below to pass the first stage
   std::string command;
-  std::cout << "$ ";
-  std::cin >> command;
-  std::cout << command << ": command not found";
+  //REPL Read-Eval-Print-Loop
+  while (true) {
+    std::cout << "$ ";
+    std::cin >> command;
+    std::cout << command << ": command not found\n";
+  }
 }
