@@ -12,9 +12,11 @@ namespace fs = std::filesystem;
 #ifdef _WIN32
   const char PATH_DELIM = ';';
   const std::string EXE_EXT = ".exe";
+  const char PATH_SEP = '\';
 #else
   constexpr char PATH_DELIM = ':';
   constexpr std::string EXE_EXT;
+  constexpr char PATH_SEP = '/';
 #endif
 
 // Reads from environment variables
@@ -131,6 +133,11 @@ int main() {
     }
     if (command == "cd") {
       trim_left(input);
+      if (const size_t pos = input.find('~'); pos != std::string::npos) {
+        auto path = get_env_var("HOME");
+        input.replace(pos, 1,*path);
+      }
+
       auto new_dir = fs::path(input);
       try {
         fs::current_path(new_dir);
