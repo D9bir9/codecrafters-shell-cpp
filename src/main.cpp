@@ -135,7 +135,7 @@ int main() {
       try {
         fs::current_path(new_dir);
       }
-      catch (const fs::filesystem_error& e) {
+      catch (const fs::filesystem_error&) {
         std::cout << command <<  ": " << input << ": No such file or directory" << "\n";
       }
       continue;
