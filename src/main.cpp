@@ -1,5 +1,7 @@
 #include <iostream>
 #include <string>
+#include <vector>
+
 static void trim_left(std::string &s) {
   // Find the first character that is NOT a whitespace
   if (const size_t first_non_space = s.find_first_not_of(" \t\n\r\v\f"); first_non_space != std::string::npos) {
@@ -16,7 +18,7 @@ int main() {
   std::cerr << std::unitbuf;
 
   // TODO: Uncomment the code below to pass the first stage
-
+  std::vector<std::string> builtins = {"echo", "exit", "type"};
   //REPL Read-Eval-Print-Loop
   while (true) {
     std::string command;
@@ -29,6 +31,15 @@ int main() {
     trim_left(input);
     if (command == "echo") {
       std::cout << input << "\n";
+      continue;
+    }
+    if (command == "type") {
+      if (auto it = std::ranges::find(builtins, input); it != builtins.end()) {
+        std::cout << *it << " is a shell builtin\n";
+      }
+      else {
+        std::cout << input << ": not found\n";
+      }
       continue;
     }
     if (command == "exit") {
