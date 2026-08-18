@@ -3,9 +3,10 @@
 #include <vector>
 #include <cstdlib>
 #include <optional>
-#include <unistd.h>
 #include <filesystem>
 #include <sstream>
+#include <memory>
+#include <array>
 
 namespace fs = std::filesystem;
 
@@ -17,6 +18,7 @@ namespace fs = std::filesystem;
   constexpr std::string EXE_EXT;
 #endif
 
+// Reads from environment variables
 static std::optional<std::string> get_env_var(const std::string& key) {
   if (const char* var = std::getenv(key.c_str()); var == nullptr) {
     return std::nullopt;
@@ -24,6 +26,7 @@ static std::optional<std::string> get_env_var(const std::string& key) {
   else return std::string(var);
 }
 
+// Checks if a path is executable
 static bool is_executable(const fs::path& path) {
   if (!fs::exists(path) || fs::is_directory(path)) {
     return false;
@@ -34,6 +37,7 @@ static bool is_executable(const fs::path& path) {
                  fs::perms::others_exec)) != fs::perms::none;
 }
 
+// checks if a command is in path and returns its full path if found
 static std::string find_command_in_path(const std::string& command) {
   const auto path = get_env_var("PATH");
 
@@ -50,6 +54,21 @@ static std::string find_command_in_path(const std::string& command) {
   return "";
 }
 
+static std::string execute_command(const std::string& command) {
+  std::array<char, 128> buffer{};
+  std::string result;
+
+  std::unique_ptr<FILE, decltype(&pclose)> pipe(popen(command.c_str(), "r"), pclose);
+  if (pipe == nullptr) {
+    return "Error: popen() failed!";
+  }
+  while (fgets(buffer.data(), buffer.size(), pipe.get()) != nullptr) {
+    result += buffer.data();
+  }
+  return result;
+}
+
+// Removes white space from the left
 static void trim_left(std::string &s) {
   // Find the first character that is NOT a whitespace
   if (const size_t first_non_space = s.find_first_not_of(" \t\n\r\v\f"); first_non_space != std::string::npos) {
@@ -77,12 +96,13 @@ int main() {
     std::cin >> command;
 
     std::getline(std::cin, input);
-    trim_left(input);
     if (command == "echo") {
+      trim_left(input);
       std::cout << input << "\n";
       continue;
     }
     if (command == "type") {
+      trim_left(input);
       if (auto it = std::ranges::find(builtins, input); it != builtins.end()) {
         std::cout << *it << " is a shell builtin\n";
       }
@@ -98,6 +118,11 @@ int main() {
     }
     if (command == "exit") {
       break;
+    }
+    if (std::string path = find_command_in_path(command); !path.empty()) {
+      std::string result= execute_command(command + input);
+      std::cout << result;
+      continue;
     }
     std::cout << command << ": command not found\n";
   }
