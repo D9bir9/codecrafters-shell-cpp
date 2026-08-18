@@ -101,7 +101,7 @@ int main() {
       std::cout << input << "\n";
       continue;
     }
-    else if (command == "type") {
+    if (command == "type") {
       trim_left(input);
       if (auto it = std::ranges::find(builtins, input); it != builtins.end()) {
         std::cout << *it << " is a shell builtin\n";
@@ -116,20 +116,31 @@ int main() {
       }
       continue;
     }
-    else if (command == "exit") {
+    if (command == "exit") {
       break;
     }
-    else if (command == "pwd") {
+    if (command == "pwd") {
       try {
         fs::path cwd = fs::current_path();
         std::cout << cwd.string() << "\n";
       }
       catch (const fs::filesystem_error& e) {
-        std::cerr << "Error getting path : " << e.what();
+        std::cerr << "Error getting path : " << e.what() << "\n";
       }
       continue;
     }
-    else if (std::string path = find_command_in_path(command); !path.empty()) {
+    if (command == "cd") {
+      trim_left(input);
+      auto new_dir = fs::path(input);
+      try {
+        fs::current_path(new_dir);
+      }
+      catch (const fs::filesystem_error& e) {
+        std::cout << command <<  ": " << input << ": No such file or directory" << "\n";
+      }
+      continue;
+    }
+    if (std::string path = find_command_in_path(command); !path.empty()) {
       std::string result= execute_command(command + input);
       std::cout << result;
       continue;
