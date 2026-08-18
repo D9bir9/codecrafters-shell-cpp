@@ -16,16 +16,20 @@ int main() {
   std::cerr << std::unitbuf;
 
   // TODO: Uncomment the code below to pass the first stage
-  std::string command;
-  std::string input;
+
   //REPL Read-Eval-Print-Loop
   while (true) {
+    std::string command;
+    std::string input;
+
     std::cout << "$ ";
     std::cin >> command;
+
+    std::getline(std::cin, input);
+    trim_left(input);
     if (command == "echo") {
-      std::getline(std::cin, input);
-      trim_left(input);
       std::cout << input << "\n";
+      continue;
     }
     if (command == "exit") {
       break;
