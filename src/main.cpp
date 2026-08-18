@@ -1,6 +1,54 @@
 #include <iostream>
 #include <string>
 #include <vector>
+#include <cstdlib>
+#include <optional>
+#include <unistd.h>
+#include <filesystem>
+#include <sstream>
+
+namespace fs = std::filesystem;
+
+#ifdef _WIN32
+  const char PATH_DELIM = ';';
+  const std::string EXE_EXT = ".exe";
+#else
+  constexpr char PATH_DELIM = ':';
+  constexpr std::string EXE_EXT;
+#endif
+
+static std::optional<std::string> get_env_var(const std::string& key) {
+  if (const char* var = std::getenv(key.c_str()); var == nullptr) {
+    return std::nullopt;
+  }
+  else return std::string(var);
+}
+
+static bool is_executable(const fs::path& path) {
+  if (!fs::exists(path) || fs::is_directory(path)) {
+    return false;
+  }
+  const fs::perms permissions = fs::status(path).permissions();
+  return (permissions & (fs::perms::owner_exec |
+                 fs::perms::group_exec |
+                 fs::perms::others_exec)) != fs::perms::none;
+}
+
+static std::string find_command_in_path(const std::string& command) {
+  const auto path = get_env_var("PATH");
+
+  std::stringstream ss(*path);
+  std::string dir;
+  const std::string cmd_with_extension = command + EXE_EXT;
+  while (std::getline(ss, dir, PATH_DELIM)) {
+    if (dir.empty()) continue;
+
+    if (auto fullpath = fs::path(dir) / cmd_with_extension; is_executable(fullpath)) {
+      return fullpath.string();
+    }
+  }
+  return "";
+}
 
 static void trim_left(std::string &s) {
   // Find the first character that is NOT a whitespace
@@ -12,6 +60,7 @@ static void trim_left(std::string &s) {
     s.clear();
   }
 }
+
 int main() {
   // Flush after every std::cout / std:cerr
   std::cout << std::unitbuf;
@@ -38,7 +87,12 @@ int main() {
         std::cout << *it << " is a shell builtin\n";
       }
       else {
-        std::cout << input << ": not found\n";
+        if (std::string path = find_command_in_path(input); !path.empty()) {
+          std::cout << input << " is " << path << "\n";
+        }
+        else {
+          std::cout << input << ": not found\n";
+        }
       }
       continue;
     }
