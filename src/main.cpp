@@ -101,7 +101,7 @@ int main() {
       std::cout << input << "\n";
       continue;
     }
-    if (command == "type") {
+    else if (command == "type") {
       trim_left(input);
       if (auto it = std::ranges::find(builtins, input); it != builtins.end()) {
         std::cout << *it << " is a shell builtin\n";
@@ -116,10 +116,20 @@ int main() {
       }
       continue;
     }
-    if (command == "exit") {
+    else if (command == "exit") {
       break;
     }
-    if (std::string path = find_command_in_path(command); !path.empty()) {
+    else if (command == "pwd") {
+      try {
+        fs::path cwd = fs::current_path();
+        std::cout << cwd.string() << "\n";
+      }
+      catch (const fs::filesystem_error& e) {
+        std::cerr << "Error getting path : " << e.what();
+      }
+      continue;
+    }
+    else if (std::string path = find_command_in_path(command); !path.empty()) {
       std::string result= execute_command(command + input);
       std::cout << result;
       continue;
