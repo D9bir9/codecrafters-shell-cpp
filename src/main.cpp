@@ -85,7 +85,7 @@ int main() {
   std::cerr << std::unitbuf;
 
   // TODO: Uncomment the code below to pass the first stage
-  std::vector<std::string> builtins = {"echo", "exit", "type"};
+  std::vector<std::string> builtins = {"echo", "exit", "type", "pwd"};
   //REPL Read-Eval-Print-Loop
   while (true) {
     std::string command;
