@@ -85,12 +85,18 @@ static void stream_print_logic(const std::string& input, std::ostream& out) {
   std::string output, word;
   bool in_quote = false;
   bool in_double_quote = false;
+  bool escape = false;
   char ch, pv_ch = 0;
 
   std::stringstream ss(input);
 
   while (ss >> std::noskipws >> ch) {
-    if (ch == '\'' && !in_double_quote) {
+    if (ch == '\\') {
+      escape = true;
+      continue;
+    }
+
+    if (ch == '\'' && !in_double_quote && !escape) {
       in_quote = !in_quote;
       if (in_quote == false) {
         output += word;
@@ -98,7 +104,7 @@ static void stream_print_logic(const std::string& input, std::ostream& out) {
       word = "";
       continue;
     }
-    if (ch == '\"' && !in_quote) {
+    if (ch == '\"' && !in_quote && !escape) {
       in_double_quote = !in_double_quote;
       if (in_double_quote == false) {
         output += word;
@@ -106,16 +112,17 @@ static void stream_print_logic(const std::string& input, std::ostream& out) {
       word = "";
       continue;
     }
-    if ((in_quote && !in_double_quote) || (!in_double_quote && in_quote)) {
+    if ((in_quote && !in_double_quote) || (!in_double_quote && in_quote) && !escape) {
       word.push_back(ch);
       pv_ch = ch;
       continue;
     }
-    if (ch == ' ' && !in_quote && !in_double_quote && pv_ch == ' ') {
+    if (ch == ' ' && !in_quote && !in_double_quote && pv_ch == ' '&&!escape) {
       continue;
     }
     output.push_back(ch);
     pv_ch = ch;
+    escape = false;
   }
   out << output;
 }
