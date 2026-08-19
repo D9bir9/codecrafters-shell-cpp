@@ -91,7 +91,7 @@ static void stream_print_logic(const std::string& input, std::ostream& out) {
   std::stringstream ss(input);
 
   while (ss >> std::noskipws >> ch) {
-    if (ch == '\\' && !in_quote && !in_double_quote) {
+    if (ch == '\\' && !escape) {
       escape = true;
       continue;
     }
@@ -112,14 +112,16 @@ static void stream_print_logic(const std::string& input, std::ostream& out) {
       word = "";
       continue;
     }
-    if ((in_quote && !in_double_quote) || (!in_double_quote && in_quote) && !escape) {
+    if (in_quote || in_double_quote) {
       word.push_back(ch);
       pv_ch = ch;
+      escape = false;
       continue;
     }
     if (ch == ' ' && !in_quote && !in_double_quote && pv_ch == ' '&&!escape) {
       continue;
     }
+
     output.push_back(ch);
     pv_ch = ch;
     escape = false;
