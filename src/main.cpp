@@ -146,19 +146,19 @@ static void stream_print_logic(const std::string& input, std::ostream& out) {
   out << output;
 }
 
-static void process_input(const char delim, std::string& input, std::string& line, std::string& command, std::string& fcmd) {
+static void process_input(const char delim, std::string& input, std::string& line, std::string& command, std::string& formatted_command) {
     trim_left(line);
     const size_t pos = line.find_first_of(delim, 1);
     command = line.substr(0, pos + 1);
     input = line.substr(pos + 1);
-    std::ostringstream formatted_command;
-    stream_print_logic(command, formatted_command);
-    fcmd = formatted_command.str();
-    trim_left(fcmd);
-    trim_right(fcmd);
-    command = fcmd;
-    if (size_t space = fcmd.find_first_of(' '); space != std::string::npos) {
-      wrap_string(fcmd, delim);
+    std::ostringstream f_command;
+    stream_print_logic(command, f_command);
+    formatted_command = f_command.str();
+    trim_left(formatted_command);
+    trim_right(formatted_command);
+    command = formatted_command;
+    if (size_t space = formatted_command.find_first_of(' '); space != std::string::npos) {
+      wrap_string(formatted_command, delim);
     }
 }
 
@@ -191,21 +191,21 @@ int main() {
     std::string command;
     std::string input;
     std::string line;
-    std::string fcmd;
+    std::string formatted_command;
 
     std::cout << "$ ";
 
-   get_input_and_format_input(input, line, command, fcmd);
+   get_input_and_format_input(input, line, command, formatted_command);
 
 
-    if (fcmd == "echo") {
+    if (formatted_command == "echo") {
       trim_left(input);
 
       std::string result = execute_command(command.append(" " + input));
       std::cout << result;
       continue;
     }
-    if (fcmd == "type") {
+    if (formatted_command == "type") {
       trim_left(input);
       if (auto it = std::ranges::find(builtins, input); it != builtins.end()) {
         std::cout << *it << " is a shell builtin\n";
@@ -220,10 +220,10 @@ int main() {
       }
       continue;
     }
-    if (fcmd == "exit") {
+    if (formatted_command == "exit") {
       break;
     }
-    if (fcmd == "pwd") {
+    if (formatted_command == "pwd") {
       try {
         fs::path cwd = fs::current_path();
         std::cout << cwd.string() << "\n";
@@ -233,7 +233,7 @@ int main() {
       }
       continue;
     }
-    if (fcmd == "cd") {
+    if (formatted_command == "cd") {
       trim_left(input);
 
       std::ostringstream oss;
@@ -255,7 +255,7 @@ int main() {
       continue;
     }
     if (std::string path = find_command_in_path(command); !path.empty()) {
-      std::string result= execute_command(fcmd + input);
+      std::string result= execute_command(formatted_command + input);
       std::cout << result;
       continue;
     }
