@@ -172,6 +172,7 @@ int main() {
       fcmd = formatted_command.str();
       trim_left(fcmd);
       trim_right(fcmd);
+      command = fcmd;
       size_t space = fcmd.find_first_of(' ');
       if (space != std::string::npos) {
         wrap_string(fcmd, '\'');
@@ -187,6 +188,7 @@ int main() {
       fcmd = formatted_command.str();
       trim_left(fcmd);
       trim_right(fcmd);
+      command = fcmd;
       size_t space = fcmd.find_first_of(' ');
       if (space != std::string::npos) {
         wrap_string(fcmd, '"');
@@ -256,7 +258,7 @@ int main() {
       }
       continue;
     }
-    if (std::string path = find_command_in_path(fcmd); !path.empty()) {
+    if (std::string path = find_command_in_path(command); !path.empty()) {
       std::string result= execute_command(fcmd + input);
       std::cout << result;
       continue;
