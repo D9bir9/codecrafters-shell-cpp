@@ -162,6 +162,23 @@ static void process_input(const char delim, std::string& input, std::string& lin
     }
 }
 
+static void get_input_and_format_input(std::string& input, std::string& line, std::string& command, std::string& fcmd) {
+  std::getline(std::cin, line);
+
+  if (line.starts_with('\'')) {
+    process_input('\'', input,line, command, fcmd);
+  }
+  else if (line.starts_with('\"')) {
+    process_input('"', input,line, command, fcmd);
+  }
+  else {
+    std::stringstream ss(line);
+    ss >> command;
+    std::getline(ss, input);
+    fcmd = command;
+  }
+}
+
 int main() {
   // Flush after every std::cout / std:cerr
   std::cout << std::unitbuf;
@@ -178,19 +195,7 @@ int main() {
 
     std::cout << "$ ";
 
-    std::getline(std::cin, line);
-    if (line.starts_with('\'')) {
-      process_input('\'', input,line, command, fcmd);
-    }
-    else if (line.starts_with('\"')) {
-      process_input('"', input,line, command, fcmd);
-    }
-    else {
-      std::stringstream ss(line);
-      ss >> command;
-      std::getline(ss, input);
-      fcmd = command;
-    }
+   get_input_and_format_input(input, line, command, fcmd);
 
 
     if (fcmd == "echo") {
