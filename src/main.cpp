@@ -93,6 +93,11 @@ static void trim_right(std::string& s) {
 
 }
 
+static void wrap_string(std::string& s, char ch) {
+  s.insert(0, 1, ch);
+  s.push_back(ch);
+}
+
 static void stream_print_logic(const std::string& input, std::ostream& out) {
   std::string output, word;
   bool in_quote = false;
@@ -241,6 +246,7 @@ int main() {
       continue;
     }
     if (std::string path = find_command_in_path(fcmd); !path.empty()) {
+      wrap_string(fcmd, '\'');
       std::string result= execute_command(fcmd + input);
       std::cout << result;
       continue;
