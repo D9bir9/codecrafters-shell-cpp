@@ -146,6 +146,22 @@ static void stream_print_logic(const std::string& input, std::ostream& out) {
   out << output;
 }
 
+static void process_input(const char delim, std::string& input, std::string& line, std::string& command, std::string& fcmd) {
+    trim_left(line);
+    size_t pos = line.find_first_of('\'', 1);
+    command = line.substr(0, pos + 1);
+    input = line.substr(pos + 1);
+    std::ostringstream formatted_command;
+    stream_print_logic(command, formatted_command);
+    fcmd = formatted_command.str();
+    trim_left(fcmd);
+    trim_right(fcmd);
+    command = fcmd;
+    if (size_t space = fcmd.find_first_of(' '); space != std::string::npos) {
+      wrap_string(fcmd, '\'');
+    }
+}
+
 int main() {
   // Flush after every std::cout / std:cerr
   std::cout << std::unitbuf;
@@ -162,37 +178,11 @@ int main() {
 
     std::cout << "$ ";
     std::getline(std::cin, line);
-    trim_left(line);
     if (line.starts_with('\'')) {
-      size_t pos = line.find_first_of('\'', 1);
-      command = line.substr(0, pos + 1);
-      input = line.substr(pos + 1);
-      std::ostringstream formatted_command;
-      stream_print_logic(command, formatted_command);
-      fcmd = formatted_command.str();
-      trim_left(fcmd);
-      trim_right(fcmd);
-      command = fcmd;
-      size_t space = fcmd.find_first_of(' ');
-      if (space != std::string::npos) {
-        wrap_string(fcmd, '\'');
-      }
-
+      process_input('\'', input,line, command, fcmd);
     }
     else if (line.starts_with('\"')) {
-      size_t pos = line.find_first_of('\"', 1);
-      command = line.substr(0, pos + 1);
-      input = line.substr(pos + 1);
-      std::ostringstream formatted_command;
-      stream_print_logic(command, formatted_command);
-      fcmd = formatted_command.str();
-      trim_left(fcmd);
-      trim_right(fcmd);
-      command = fcmd;
-      size_t space = fcmd.find_first_of(' ');
-      if (space != std::string::npos) {
-        wrap_string(fcmd, '"');
-      }
+      process_input('"', input,line, command, fcmd);
     }
     else {
       std::stringstream ss(line);
