@@ -99,9 +99,10 @@ static void stream_print_logic(const std::string& input, std::ostream& out) {
     if (ch == '\'' && !in_double_quote && !escape) {
       in_quote = !in_quote;
       if (in_quote == false) {
+        word.push_back(ch);
         output += word;
       }
-      word = "";
+      word = "'";
       continue;
     }
     if (ch == '\"' && !in_quote && !escape) {
@@ -226,7 +227,7 @@ int main() {
       }
       continue;
     }
-    if (std::string path = find_command_in_path(command); !path.empty()) {
+    if (std::string path = find_command_in_path(fcmd); !path.empty()) {
       std::string result= execute_command(fcmd + input);
       std::cout << result;
       continue;
