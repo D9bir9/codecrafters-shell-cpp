@@ -80,6 +80,18 @@ static void trim_left(std::string &s) {
     s.clear();
   }
 }
+static void trim_right(std::string& s) {
+  const std::string WHITESPACE = " \n\r\t\f\v";
+
+  // Find the last character that is NOT a whitespace character
+  if (const size_t end = s.find_last_not_of(WHITESPACE); end != std::string::npos) {
+    s.erase(end + 1);
+  } else {
+    // If the string is not entirely whitespace, erase everything after 'end'
+    s.clear(); // The string was completely whitespace
+  }
+
+}
 
 static void stream_print_logic(const std::string& input, std::ostream& out) {
   std::string output, word;
@@ -99,10 +111,9 @@ static void stream_print_logic(const std::string& input, std::ostream& out) {
     if (ch == '\'' && !in_double_quote && !escape) {
       in_quote = !in_quote;
       if (in_quote == false) {
-        word.push_back(ch);
         output += word;
       }
-      word = "'";
+      word = "";
       continue;
     }
     if (ch == '\"' && !in_quote && !escape) {
@@ -127,6 +138,8 @@ static void stream_print_logic(const std::string& input, std::ostream& out) {
     pv_ch = ch;
     escape = false;
   }
+  trim_left(output);
+  trim_right(output);
   out << output;
 }
 
