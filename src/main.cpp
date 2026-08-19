@@ -148,7 +148,7 @@ static void stream_print_logic(const std::string& input, std::ostream& out) {
 
 static void process_input(const char delim, std::string& input, std::string& line, std::string& command, std::string& fcmd) {
     trim_left(line);
-    size_t pos = line.find_first_of('\'', 1);
+    size_t pos = line.find_first_of(delim, 1);
     command = line.substr(0, pos + 1);
     input = line.substr(pos + 1);
     std::ostringstream formatted_command;
@@ -158,7 +158,7 @@ static void process_input(const char delim, std::string& input, std::string& lin
     trim_right(fcmd);
     command = fcmd;
     if (size_t space = fcmd.find_first_of(' '); space != std::string::npos) {
-      wrap_string(fcmd, '\'');
+      wrap_string(fcmd, delim);
     }
 }
 
