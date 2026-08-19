@@ -140,12 +140,34 @@ int main() {
   while (true) {
     std::string command;
     std::string input;
+    std::string line;
 
     std::cout << "$ ";
-    std::cin >> command;
-    trim_left(command);
+    std::getline(std::cin, line);
+    trim_left(line);
+    if (line.starts_with('\'')) {
+      size_t pos = line.find_first_of('\'', 1);
+      command = line.substr(0, pos + 1);
+      input = line.substr(pos + 1);
+      std::ostringstream formatted_command;
+      stream_print_logic(command, formatted_command);
+      command = formatted_command.str();
+    }
+    else if (line.starts_with('\"')) {
+      size_t pos = line.find_first_of('\"', 1);
+      command = line.substr(0, pos + 1);
+      input = line.substr(pos + 1);
+      std::ostringstream formatted_command;
+      stream_print_logic(command, formatted_command);
+      command = formatted_command.str();
+    }
+    else {
+      std::stringstream ss(line);
+      ss >> command;
+      std::getline(ss, input);
+    }
 
-    std::getline(std::cin, input);
+
     if (command == "echo") {
       trim_left(input);
 
