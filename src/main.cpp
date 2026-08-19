@@ -100,7 +100,36 @@ int main() {
     std::getline(std::cin, input);
     if (command == "echo") {
       trim_left(input);
-      std::cout << input << "\n";
+      std::string output;
+      std::string word;
+      bool in_quote = false;
+      char ch;
+      char pv_ch;
+      std::stringstream ss(input);
+      while (ss >> std::noskipws >> ch) {
+        if (ch == '\'') {
+          in_quote = true;
+          continue;
+        }
+        if (in_quote) {
+            if (ch == '\'') {
+              in_quote = false;
+              size_t pos = output.find('\'');
+              output.replace(pos, 1, "");
+              output += word;
+              continue;
+            }
+          word.push_back(ch);
+          pv_ch = ch;
+        }
+        if (ch == ' ' && !in_quote && pv_ch == ' ') {
+          continue;
+        }
+        output.push_back(ch);
+        pv_ch = ch;
+      }
+      std::cout << output;
+      std::cout << "\n";
       continue;
     }
     if (command == "type") {
