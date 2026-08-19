@@ -81,6 +81,45 @@ static void trim_left(std::string &s) {
   }
 }
 
+static void stream_print_logic(const std::string& input, std::ostream& out) {
+  std::string output, word;
+  bool in_quote = false;
+  bool in_double_quote = false;
+  char ch, pv_ch = 0;
+
+  std::stringstream ss(input);
+
+  while (ss >> std::noskipws >> ch) {
+    if (ch == '\'' && !in_double_quote) {
+      in_quote = !in_quote;
+      if (in_quote == false) {
+        output += word;
+      }
+      word = "";
+      continue;
+    }
+    if (ch == '\"' && !in_quote) {
+      in_double_quote = !in_double_quote;
+      if (in_double_quote == false) {
+        output += word;
+      }
+      word = "";
+      continue;
+    }
+    if ((in_quote && !in_double_quote) || (!in_double_quote && in_quote)) {
+      word.push_back(ch);
+      pv_ch = ch;
+      continue;
+    }
+    if (ch == ' ' && !in_quote && !in_double_quote && pv_ch == ' ') {
+      continue;
+    }
+    output.push_back(ch);
+    pv_ch = ch;
+  }
+  out << output;
+}
+
 int main() {
   // Flush after every std::cout / std:cerr
   std::cout << std::unitbuf;
@@ -101,33 +140,7 @@ int main() {
     if (command == "echo") {
       trim_left(input);
 
-      std::string output, word;
-      bool in_quote = false;
-      char ch, pv_ch;
-
-      std::stringstream ss(input);
-
-      while (ss >> std::noskipws >> ch) {
-        if (ch == '\'') {
-          in_quote = !in_quote;
-          if (in_quote == false) {
-            output += word;
-          }
-          word = "";
-          continue;
-        }
-        if (in_quote) {
-          word.push_back(ch);
-          pv_ch = ch;
-          continue;
-        }
-        if (ch == ' ' && !in_quote && pv_ch == ' ') {
-          continue;
-        }
-        output.push_back(ch);
-        pv_ch = ch;
-      }
-      std::cout << output;
+      stream_print_logic(input, std::cout);
       std::cout << "\n";
       continue;
     }
@@ -161,17 +174,22 @@ int main() {
     }
     if (command == "cd") {
       trim_left(input);
-      if (const size_t pos = input.find('~'); pos != std::string::npos) {
+
+      std::ostringstream oss;
+      stream_print_logic(input, oss);
+      auto in = std::string(oss.str());
+
+      if (const size_t pos = in.find('~'); pos != std::string::npos) {
         auto path = get_env_var("HOME");
-        input.replace(pos, 1,*path);
+        in.replace(pos, 1,*path);
       }
 
-      auto new_dir = fs::path(input);
+      auto new_dir = fs::path(in);
       try {
         fs::current_path(new_dir);
       }
       catch (const fs::filesystem_error&) {
-        std::cout << command <<  ": " << input << ": No such file or directory" << "\n";
+        std::cout << command <<  ": " << in << ": No such file or directory" << "\n";
       }
       continue;
     }
