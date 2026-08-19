@@ -171,8 +171,8 @@ int main() {
     if (command == "echo") {
       trim_left(input);
 
-      stream_print_logic(input, std::cout);
-      std::cout << "\n";
+      std::string result = execute_command(command.append(" " + input));
+      std::cout << result;
       continue;
     }
     if (command == "type") {
