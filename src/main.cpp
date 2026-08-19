@@ -91,7 +91,7 @@ static void stream_print_logic(const std::string& input, std::ostream& out) {
   std::stringstream ss(input);
 
   while (ss >> std::noskipws >> ch) {
-    if (ch == '\\' && !escape) {
+    if (ch == '\\' && !escape && !in_quote) {
       escape = true;
       continue;
     }
