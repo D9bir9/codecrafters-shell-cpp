@@ -226,7 +226,7 @@ int main() {
       }
       continue;
     }
-    if (std::string path = find_command_in_path(fcmd); !path.empty()) {
+    if (std::string path = find_command_in_path(command); !path.empty()) {
       std::string result= execute_command(fcmd + input);
       std::cout << result;
       continue;
