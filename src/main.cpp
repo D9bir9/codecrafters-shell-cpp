@@ -141,6 +141,7 @@ int main() {
     std::string command;
     std::string input;
     std::string line;
+    std::string fcmd;
 
     std::cout << "$ ";
     std::getline(std::cin, line);
@@ -151,7 +152,7 @@ int main() {
       input = line.substr(pos + 1);
       std::ostringstream formatted_command;
       stream_print_logic(command, formatted_command);
-      command = formatted_command.str();
+      fcmd = formatted_command.str();
     }
     else if (line.starts_with('\"')) {
       size_t pos = line.find_first_of('\"', 1);
@@ -159,23 +160,24 @@ int main() {
       input = line.substr(pos + 1);
       std::ostringstream formatted_command;
       stream_print_logic(command, formatted_command);
-      command = formatted_command.str();
+      fcmd = formatted_command.str();
     }
     else {
       std::stringstream ss(line);
       ss >> command;
       std::getline(ss, input);
+      fcmd = command;
     }
 
 
-    if (command == "echo") {
+    if (fcmd == "echo") {
       trim_left(input);
 
       std::string result = execute_command(command.append(" " + input));
       std::cout << result;
       continue;
     }
-    if (command == "type") {
+    if (fcmd == "type") {
       trim_left(input);
       if (auto it = std::ranges::find(builtins, input); it != builtins.end()) {
         std::cout << *it << " is a shell builtin\n";
@@ -190,10 +192,10 @@ int main() {
       }
       continue;
     }
-    if (command == "exit") {
+    if (fcmd == "exit") {
       break;
     }
-    if (command == "pwd") {
+    if (fcmd == "pwd") {
       try {
         fs::path cwd = fs::current_path();
         std::cout << cwd.string() << "\n";
@@ -203,7 +205,7 @@ int main() {
       }
       continue;
     }
-    if (command == "cd") {
+    if (fcmd == "cd") {
       trim_left(input);
 
       std::ostringstream oss;
