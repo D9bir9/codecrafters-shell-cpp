@@ -143,8 +143,6 @@ static void stream_print_logic(const std::string& input, std::ostream& out) {
     pv_ch = ch;
     escape = false;
   }
-  trim_left(output);
-  trim_right(output);
   out << output;
 }
 
@@ -172,6 +170,13 @@ int main() {
       std::ostringstream formatted_command;
       stream_print_logic(command, formatted_command);
       fcmd = formatted_command.str();
+      trim_left(fcmd);
+      trim_right(fcmd);
+      size_t space = fcmd.find_first_of(' ');
+      if (space != std::string::npos) {
+        wrap_string(fcmd, '\'');
+      }
+
     }
     else if (line.starts_with('\"')) {
       size_t pos = line.find_first_of('\"', 1);
@@ -180,6 +185,12 @@ int main() {
       std::ostringstream formatted_command;
       stream_print_logic(command, formatted_command);
       fcmd = formatted_command.str();
+      trim_left(fcmd);
+      trim_right(fcmd);
+      size_t space = fcmd.find_first_of(' ');
+      if (space != std::string::npos) {
+        wrap_string(fcmd, '"');
+      }
     }
     else {
       std::stringstream ss(line);
@@ -246,7 +257,6 @@ int main() {
       continue;
     }
     if (std::string path = find_command_in_path(fcmd); !path.empty()) {
-      wrap_string(fcmd, '\'');
       std::string result= execute_command(fcmd + input);
       std::cout << result;
       continue;
