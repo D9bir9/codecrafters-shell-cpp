@@ -209,6 +209,26 @@ static std::vector<std::string> Tokenize_input(const std::string& input_line) {
       }
       continue;
     }
+
+    if (ch == '1' && !in_single_quote && !in_double_quote) {
+      if (i + 1 > input_line.size() && input_line[i + 1] == '>') {
+        if (!current_token.empty() || token_has_content) {
+          args.push_back(current_token);
+          current_token.clear();
+          token_has_content = false;
+        }
+        if (i + 2 < input_line.size() && input_line[i + 2] == '>') {
+          args.emplace_back("1>>");
+          i += 2;
+        }
+        else {
+          args.emplace_back("1>");
+          i++;
+        }
+        continue;
+      }
+    }
+
     if (ch == '2' && !in_single_quote && !in_double_quote) {
       if (i + 1 > input_line.size() && input_line[i + 1] == '>') {
         if (!current_token.empty() || token_has_content) {
@@ -271,11 +291,11 @@ int main() {
     bool cerr_redirect_active = false;
     bool append_mode = false;
 
-    auto redir_it = std::ranges::find_if(args.begin(), args.end(),[](const std::string& arg){return arg == ">" || arg == ">>";});
+    auto redir_it = std::ranges::find_if(args.begin(), args.end(),[](const std::string& arg){return arg == ">" || arg == "1>" || arg == ">>" || arg == "2>>";});
     auto err_redir_it = std::ranges::find_if(args.begin(), args.end(),[](const std::string& arg){return arg == "2>" || arg == "2>>";});
 
     if ( redir_it != args.end()) {
-      if (*redir_it == ">>") append_mode = true;
+      if (*redir_it == ">>" || *redir_it == "1>>") append_mode = true;
 
       if (std::distance(args.begin(), redir_it) + 1 < args.size()) {
         redirect_file = *(redir_it + 1);
