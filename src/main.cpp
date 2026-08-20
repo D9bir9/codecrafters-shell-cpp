@@ -200,7 +200,7 @@ static std::vector<std::string> Tokenize_input(const std::string& input_line) {
         current_token.clear();
         token_has_content = false;
       }
-      if (i + 1 > input_line.size() && input_line[i + 1] == '>') {
+      if (i + 1 < input_line.size() && input_line[i + 1] == '>') {
         args.emplace_back(">>");
         i++;
       }
@@ -211,7 +211,7 @@ static std::vector<std::string> Tokenize_input(const std::string& input_line) {
     }
 
     if (ch == '1' && !in_single_quote && !in_double_quote) {
-      if (i + 1 > input_line.size() && input_line[i + 1] == '>') {
+      if (i + 1 < input_line.size() && input_line[i + 1] == '>') {
         if (!current_token.empty() || token_has_content) {
           args.push_back(current_token);
           current_token.clear();
@@ -230,7 +230,7 @@ static std::vector<std::string> Tokenize_input(const std::string& input_line) {
     }
 
     if (ch == '2' && !in_single_quote && !in_double_quote) {
-      if (i + 1 > input_line.size() && input_line[i + 1] == '>') {
+      if (i + 1 < input_line.size() && input_line[i + 1] == '>') {
         if (!current_token.empty() || token_has_content) {
           args.push_back(current_token);
           current_token.clear();
@@ -290,8 +290,9 @@ int main() {
     bool cout_redirect_active = false;
     bool cerr_redirect_active = false;
     bool append_mode = false;
+    bool err_append_mode = false;
 
-    auto redir_it = std::ranges::find_if(args.begin(), args.end(),[](const std::string& arg){return arg == ">" || arg == "1>" || arg == ">>" || arg == "2>>";});
+    auto redir_it = std::ranges::find_if(args.begin(), args.end(),[](const std::string& arg){return arg == ">" || arg == "1>" || arg == ">>" || arg == "1>>";});
     auto err_redir_it = std::ranges::find_if(args.begin(), args.end(),[](const std::string& arg){return arg == "2>" || arg == "2>>";});
 
     if ( redir_it != args.end()) {
@@ -308,7 +309,7 @@ int main() {
     }
 
     if (err_redir_it != args.end()) {
-      if (*err_redir_it == "2>>") append_mode = true;
+      if (*err_redir_it == "2>>") err_append_mode = true;
       if (std::distance(args.begin(), err_redir_it) + 1 < args.size()) {
         err_redirect_file = *(err_redir_it + 1);
         cerr_redirect_active = true;
@@ -344,7 +345,7 @@ int main() {
 
     // 2> or 2>> output redirection
     if (cerr_redirect_active) {
-      err_file.open(err_redirect_file, (append_mode ? std::ios::out | std::ios::app : std::ios::out | std::ios::trunc));
+      err_file.open(err_redirect_file, (err_append_mode ? std::ios::out | std::ios::app : std::ios::out | std::ios::trunc));
 
       if (!err_file.is_open()) {
         std::cerr << "Shell: failed to open file " << redirect_file << "\n";
