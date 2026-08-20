@@ -295,6 +295,18 @@ int main() {
     auto redir_it = std::ranges::find_if(args.begin(), args.end(),[](const std::string& arg){return arg == ">" || arg == "1>" || arg == ">>" || arg == "1>>";});
     auto err_redir_it = std::ranges::find_if(args.begin(), args.end(),[](const std::string& arg){return arg == "2>" || arg == "2>>";});
 
+    if (err_redir_it != args.end()) {
+      if (*err_redir_it == "2>>") err_append_mode = true;
+      if (std::distance(args.begin(), err_redir_it) + 1 < args.size()) {
+        err_redirect_file = *(err_redir_it + 1);
+        cerr_redirect_active = true;
+        args.erase(err_redir_it, err_redir_it + 2);
+      }
+      else {
+        std::cout << "Shell: syntax error near unexpected token 'newline' \n";
+      }
+    }
+
     if ( redir_it != args.end()) {
       if (*redir_it == ">>" || *redir_it == "1>>") append_mode = true;
 
@@ -302,18 +314,6 @@ int main() {
         redirect_file = *(redir_it + 1);
         cout_redirect_active = true;
         args.erase(redir_it, redir_it + 2);
-      }
-      else {
-        std::cout << "Shell: syntax error near unexpected token 'newline' \n";
-      }
-    }
-
-    if (err_redir_it != args.end()) {
-      if (*err_redir_it == "2>>") err_append_mode = true;
-      if (std::distance(args.begin(), err_redir_it) + 1 < args.size()) {
-        err_redirect_file = *(err_redir_it + 1);
-        cerr_redirect_active = true;
-        args.erase(err_redir_it, err_redir_it + 2);
       }
       else {
         std::cout << "Shell: syntax error near unexpected token 'newline' \n";
@@ -338,6 +338,8 @@ int main() {
 
       if (!out_file.is_open()) {
         std::cerr << "Shell: failed to open file " << redirect_file << "\n";
+        if (cout_redirect_active) std::cout.rdbuf(old_cout_buffer);
+        if (cerr_redirect_active) std::cerr.rdbuf(old_cerr_buffer);
         continue;
       }
       std::cout.rdbuf(out_file.rdbuf());
@@ -349,6 +351,9 @@ int main() {
 
       if (!err_file.is_open()) {
         std::cerr << "Shell: failed to open file " << redirect_file << "\n";
+        if (cout_redirect_active) out_file.close();
+        if (cout_redirect_active) std::cout.rdbuf(old_cout_buffer);
+        if (cerr_redirect_active) std::cerr.rdbuf(old_cerr_buffer);
         continue;
       }
       std::cerr.rdbuf(err_file.rdbuf());
@@ -397,6 +402,7 @@ int main() {
     }
     else if (command == "cd") {
       std::vector<std::string>::value_type target_path = (args.size() > 1) ? args[1] : "";
+      bool home_error = false;
       if (target_path.empty() || target_path.starts_with('~')) {
         if (auto home = get_env_var("HOME"); home.has_value()) {
           if (target_path.empty()) target_path = *home;
@@ -405,16 +411,16 @@ int main() {
       }
       else {
         std::cout << "HOME not set\n";
-        if (cout_redirect_active) std::cout.rdbuf(old_cout_buffer);
-        if (cerr_redirect_active) std::cerr.rdbuf(old_cerr_buffer);
-        continue;
+        home_error = true;
       }
 
-      try {
-        fs::current_path(fs::path(target_path));
-      }
-      catch (const fs::filesystem_error&) {
-        std::cout << "cd: " << (args.size() > 1? args[1] : "") << ": No such file or directory" << "\n";
+      if (!home_error) {
+        try {
+          fs::current_path(fs::path(target_path));
+        }
+        catch (const fs::filesystem_error&) {
+          std::cout << "cd: " << (args.size() > 1? args[1] : "") << ": No such file or directory" << "\n";
+        }
       }
     }
     else if (std::string path = find_command_in_path(command); !path.empty()) {
