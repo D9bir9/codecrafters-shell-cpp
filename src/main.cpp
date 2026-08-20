@@ -373,7 +373,6 @@ int main() {
         }
       }
       else {
-        std::cout << "HOME not set\n";
         home_error = true;
       }
 
