@@ -104,29 +104,6 @@ static std::string find_command_in_path(const std::string& command) {
   return "";
 }
 
-// static std::string execute_command(const std::string& command) {
-//   /*
-//   std::array<char, 128> buffer{};
-//   const std::string complete_cmd = command + " 2>&1";
-//   std::string result;
-//
-//   const std::unique_ptr<FILE, int(*)(FILE*)> pipe(popen(complete_cmd.c_str(), "r"), pclose);
-//   if (pipe == nullptr) {
-//     return "Error: popen() failed!";
-//   }
-//   while (fgets(buffer.data(), buffer.size(), pipe.get()) != nullptr) {
-//     result += buffer.data();
-//   }
-//   return result;
-//   */
-//
-//   int return_code = std::system(command.c_str());
-//   if (return_code == -1) {
-//     std::cout << "Error: command execution failed\n";
-//   }
-//   return "";
-// }
-
 // Trim helpers
 static void trim_left(std::string &s) {
   static constexpr const char* WHITESPACE = " \t\n\r\v\f";
@@ -149,11 +126,6 @@ static void trim_right(std::string &s) {
 static void trim(std::string &s) {
   trim_left(s);
   trim_right(s);
-}
-
-static void wrap_string(std::string& s, const char ch) {
-  s.insert(0, 1, ch);
-  s.push_back(ch);
 }
 
 static std::vector<std::string> Tokenize_input(const std::string& input_line) {
@@ -322,9 +294,7 @@ int main() {
     bool out_app = false;
     bool err_app = false;
 
-    auto err_redir_it = std::ranges::find_if(args.begin(), args.end(),[](const std::string& arg){return arg == "2>" || arg == "2>>";});
-
-    if (err_redir_it != args.end()) {
+    if (auto err_redir_it = std::ranges::find_if(args.begin(), args.end(),[](const std::string& arg){return arg == "2>" || arg == "2>>";}); err_redir_it != args.end()) {
       if (*err_redir_it == "2>>") err_app = true;
       if (std::distance(args.begin(), err_redir_it) + 1 < args.size()) {
         err_redirect_file = *(err_redir_it + 1);
@@ -335,9 +305,8 @@ int main() {
         std::cout << "Shell: syntax error near unexpected token 'newline' \n";
       }
     }
-    auto redir_it = std::ranges::find_if(args.begin(), args.end(),[](const std::string& arg){return arg == ">" || arg == "1>" || arg == ">>" || arg == "1>>";});
 
-    if ( redir_it != args.end()) {
+    if (auto redir_it = std::ranges::find_if(args.begin(), args.end(),[](const std::string& arg){return arg == ">" || arg == "1>" || arg == ">>" || arg == "1>>";}); redir_it != args.end()) {
       if (*redir_it == ">>" || *redir_it == "1>>") out_app = true;
 
       if (std::distance(args.begin(), redir_it) + 1 < args.size()) {
@@ -398,9 +367,6 @@ int main() {
         std::exit(0);
       }
       if (std::string binary_path = find_command_in_path(command); !binary_path.empty()) {
-        if (command.find(' ') != std::string::npos) {
-          wrap_string(command, '\'');
-        }
         std::vector<char*> c_args;
         for (auto& arg : args) c_args.push_back(const_cast<char*>(arg.c_str()));
         c_args.push_back(nullptr);
