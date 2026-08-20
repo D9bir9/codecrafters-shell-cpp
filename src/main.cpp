@@ -5,7 +5,6 @@
 #include <filesystem>
 #include <sstream>
 #include <memory>
-#include <array>
 #include <readline/readline.h>
 #include <readline/history.h>
 #include <cstring>
@@ -105,27 +104,28 @@ static std::string find_command_in_path(const std::string& command) {
   return "";
 }
 
-static std::string execute_command(const std::string& command) {
-  /*
-  std::array<char, 128> buffer{};
-  const std::string complete_cmd = command + " 2>&1";
-  std::string result;
-
-  const std::unique_ptr<FILE, int(*)(FILE*)> pipe(popen(complete_cmd.c_str(), "r"), pclose);
-  if (pipe == nullptr) {
-    return "Error: popen() failed!";
-  }
-  while (fgets(buffer.data(), buffer.size(), pipe.get()) != nullptr) {
-    result += buffer.data();
-  }
-  return result;
-  */
-  int return_code = std::system(command.c_str());
-  if (return_code == -1) {
-    std::cout << "Error: command execution failed\n";
-  }
-  return "";
-}
+// static std::string execute_command(const std::string& command) {
+//   /*
+//   std::array<char, 128> buffer{};
+//   const std::string complete_cmd = command + " 2>&1";
+//   std::string result;
+//
+//   const std::unique_ptr<FILE, int(*)(FILE*)> pipe(popen(complete_cmd.c_str(), "r"), pclose);
+//   if (pipe == nullptr) {
+//     return "Error: popen() failed!";
+//   }
+//   while (fgets(buffer.data(), buffer.size(), pipe.get()) != nullptr) {
+//     result += buffer.data();
+//   }
+//   return result;
+//   */
+//
+//   int return_code = std::system(command.c_str());
+//   if (return_code == -1) {
+//     std::cout << "Error: command execution failed\n";
+//   }
+//   return "";
+// }
 
 // Trim helpers
 static void trim_left(std::string &s) {
@@ -268,7 +268,7 @@ static std::vector<std::string> Tokenize_input(const std::string& input_line) {
   return args;
 }
 
-static void execute_builtin(const std::string& command, std::vector<std::string>& args) {
+static void execute_builtin(const std::string& command, const std::vector<std::string>& args) {
 
     if (command == "echo") {
       for (size_t i{1}; i < args.size(); ++i) {
@@ -351,10 +351,10 @@ int main() {
     }
 
     if (args.empty()) continue;
-    for (size_t i{1}; i < args.size(); ++i) {
+    for (size_t i{}; i < args.size(); ++i) {
       trim(args[i]);
     }
-    std::string command = args.front();
+    std::string& command = args.front();
 
 
     std::ofstream out_file;
@@ -397,7 +397,11 @@ int main() {
       if (std::ranges::find(builtins, command) != builtins.end()) {
         execute_builtin(command, args);
         std::exit(0);
-      } else if (std::string binary_path = find_command_in_path(command); !binary_path.empty()) {
+      }
+      if (std::string binary_path = find_command_in_path(command); !binary_path.empty()) {
+        if (command.find(' ') != std::string::npos) {
+          wrap_string(command, '\'');
+        }
         std::vector<char*> c_args;
         for (auto& arg : args) c_args.push_back(const_cast<char*>(arg.c_str()));
         c_args.push_back(nullptr);
