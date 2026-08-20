@@ -339,19 +339,6 @@ int main() {
     std::ofstream out_file;
     std::ofstream err_file;
 
-    // > or >> output redirection
-    if (cout_redirect_active) {
-        out_file.open(redirect_file, (append_mode ? std::ios::out | std::ios::app : std::ios::out | std::ios::trunc));
-
-      if (!out_file.is_open()) {
-        std::cerr << "Shell: failed to open file " << redirect_file << "\n";
-        if (cout_redirect_active) std::cout.rdbuf(old_cout_buffer);
-        if (cerr_redirect_active) std::cerr.rdbuf(old_cerr_buffer);
-        continue;
-      }
-      std::cout.rdbuf(out_file.rdbuf());
-    }
-
     // 2> or 2>> output redirection
     if (cerr_redirect_active) {
       err_file.open(err_redirect_file, (err_append_mode ? std::ios::out | std::ios::app : std::ios::out | std::ios::trunc));
@@ -366,6 +353,18 @@ int main() {
       std::cerr.rdbuf(err_file.rdbuf());
     }
 
+    // > or >> output redirection
+    if (cout_redirect_active) {
+        out_file.open(redirect_file, (append_mode ? std::ios::out | std::ios::app : std::ios::out | std::ios::trunc));
+
+      if (!out_file.is_open()) {
+        std::cerr << "Shell: failed to open file " << redirect_file << "\n";
+        if (cout_redirect_active) std::cout.rdbuf(old_cout_buffer);
+        if (cerr_redirect_active) std::cerr.rdbuf(old_cerr_buffer);
+        continue;
+      }
+      std::cout.rdbuf(out_file.rdbuf());
+    }
 
     if (command == "exit") {
       if (cout_redirect_active) std::cout.rdbuf(old_cout_buffer);
