@@ -104,6 +104,7 @@ static std::string find_command_in_path(const std::string& command) {
 }
 
 static std::string execute_command(const std::string& command) {
+  /*
   std::array<char, 128> buffer{};
   const std::string complete_cmd = command + " 2>&1";
   std::string result;
@@ -116,6 +117,12 @@ static std::string execute_command(const std::string& command) {
     result += buffer.data();
   }
   return result;
+  */
+  int return_code = std::system(command.c_str());
+  if (return_code == -1) {
+    std::cout << "Error: command execution failed\n";
+  }
+  return "";
 }
 
 // Trim helpers
@@ -431,8 +438,7 @@ int main() {
       for (size_t i{1}; i < args.size(); ++i) {
         rebuild_command += " " + args[i];
       }
-      std::string result= execute_command(rebuild_command);
-      std::cout << result;
+      execute_command(rebuild_command);
     }
     else std::cout << command << ": command not found\n";
 
