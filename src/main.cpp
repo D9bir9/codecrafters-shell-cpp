@@ -8,8 +8,6 @@
 #include <array>
 #include <readline/readline.h>
 #include <readline/history.h>
-#include <cstdlib>
-#include <cstdio>
 #include <cstring>
 #include <ranges>
 #include <algorithm>
@@ -107,9 +105,10 @@ static std::string find_command_in_path(const std::string& command) {
 
 static std::string execute_command(const std::string& command) {
   std::array<char, 128> buffer{};
+  const std::string complete_cmd = command + " 2>&1";
   std::string result;
 
-  std::unique_ptr<FILE, decltype(&pclose)> pipe(popen(command.c_str(), "r"), pclose);
+  const std::unique_ptr<FILE, int(*)(FILE*)> pipe(popen(complete_cmd.c_str(), "r"), pclose);
   if (pipe == nullptr) {
     return "Error: popen() failed!";
   }
@@ -201,7 +200,32 @@ static std::vector<std::string> Tokenize_input(const std::string& input_line) {
         current_token.clear();
         token_has_content = false;
       }
-      args.emplace_back(">");
+      if (i + 1 > input_line.size() && input_line[i + 1] == '>') {
+        args.emplace_back(">>");
+        i++;
+      }
+      else {
+        args.emplace_back(">");
+      }
+      continue;
+    }
+    if (ch == '2' && !in_single_quote && !in_double_quote) {
+      if (i + 1 > input_line.size() && input_line[i + 1] == '>') {
+        if (!current_token.empty() || token_has_content) {
+          args.push_back(current_token);
+          current_token.clear();
+          token_has_content = false;
+        }
+        if (i + 2 < input_line.size() && input_line[i + 2] == '>') {
+          args.emplace_back("2>>");
+          i += 2;
+        }
+        else {
+          args.emplace_back("2>");
+          i++;
+        }
+        continue;
+      }
     }
 
     // Normal character
@@ -242,13 +266,33 @@ int main() {
     if (args.empty()) continue;
 
     std::string redirect_file;
-    bool redirect_active = false;
+    std::string err_redirect_file;
+    bool cout_redirect_active = false;
+    bool cerr_redirect_active = false;
+    bool append_mode = false;
 
-    if (auto redir_it = std::ranges::find(args, ">"); redir_it != args.end()) {
+    auto redir_it = std::ranges::find_if(args.begin(), args.end(),[](const std::string& arg){return arg == ">" || arg == ">>";});
+    auto err_redir_it = std::ranges::find_if(args.begin(), args.end(),[](const std::string& arg){return arg == "2>" || arg == "2>>";});
+
+    if ( redir_it != args.end()) {
+      if (*redir_it == ">>") append_mode = true;
+
       if (std::distance(args.begin(), redir_it) + 1 < args.size()) {
         redirect_file = *(redir_it + 1);
-        redirect_active = true;
+        cout_redirect_active = true;
         args.erase(redir_it, redir_it + 2);
+      }
+      else {
+        std::cout << "Shell: syntax error near unexpected token 'newline' \n";
+      }
+    }
+
+    if (err_redir_it != args.end()) {
+      if (*err_redir_it == "2>>") append_mode = true;
+      if (std::distance(args.begin(), err_redir_it) + 1 < args.size()) {
+        err_redirect_file = *(err_redir_it + 1);
+        cerr_redirect_active = true;
+        args.erase(err_redir_it, err_redir_it + 2);
       }
       else {
         std::cout << "Shell: syntax error near unexpected token 'newline' \n";
@@ -262,24 +306,47 @@ int main() {
     std::string command = args.front();
 
     std::streambuf *old_cout_buffer = std::cout.rdbuf();
+    std::streambuf *old_cerr_buffer = std::cerr.rdbuf();
+
     std::ofstream out_file;
-    if (redirect_active) {
-      out_file.open(redirect_file, std::ios::out | std::ios::trunc);
+    std::ofstream err_file;
+
+    // > or >> output redirection
+    if (cout_redirect_active) {
+        out_file.open(redirect_file, (append_mode ? std::ios::out | std::ios::app : std::ios::out | std::ios::trunc));
+
       if (!out_file.is_open()) {
         std::cerr << "Shell: failed to open file " << redirect_file << "\n";
+        continue;
       }
       std::cout.rdbuf(out_file.rdbuf());
     }
 
-    if (command == "echo") {
+    // 2> or 2>> output redirection
+    if (cerr_redirect_active) {
+      err_file.open(err_redirect_file, (append_mode ? std::ios::out | std::ios::app : std::ios::out | std::ios::trunc));
+
+      if (!err_file.is_open()) {
+        std::cerr << "Shell: failed to open file " << redirect_file << "\n";
+        continue;
+      }
+      std::cerr.rdbuf(err_file.rdbuf());
+    }
+
+
+    if (command == "exit") {
+      if (cout_redirect_active) std::cout.rdbuf(old_cout_buffer);
+      if (cerr_redirect_active) std::cerr.rdbuf(old_cerr_buffer);
+      break;
+    }
+    else if (command == "echo") {
       for (size_t i{1}; i < args.size(); ++i) {
         std::cout << args[i];
         if (i + 1 < args.size()) std::cout << " ";
       }
       std::cout << "\n";
-      continue;
     }
-    if (command == "type") {
+    else if (command == "type") {
       if (args.size() < 2) {
         std::cout << "type: missing operand \n";
       }
@@ -297,14 +364,8 @@ int main() {
           }
         }
       }
-
-      continue;
     }
-    if (command == "exit") {
-      if (redirect_active) std::cout.rdbuf(old_cout_buffer);
-      break;
-    }
-    if (command == "pwd") {
+    else if (command == "pwd") {
       try {
         fs::path cwd = fs::current_path();
         std::cout << cwd.string() << "\n";
@@ -312,9 +373,8 @@ int main() {
       catch (const fs::filesystem_error& e) {
         std::cerr << "Error getting path : " << e.what() << "\n";
       }
-      continue;
     }
-    if (command == "cd") {
+    else if (command == "cd") {
       std::vector<std::string>::value_type target_path = (args.size() > 1) ? args[1] : "";
       if (target_path.empty() || target_path.starts_with('~')) {
         if (auto home = get_env_var("HOME"); home.has_value()) {
@@ -324,7 +384,8 @@ int main() {
       }
       else {
         std::cout << "HOME not set\n";
-        if (redirect_active) std::cout.rdbuf(old_cout_buffer);
+        if (cout_redirect_active) std::cout.rdbuf(old_cout_buffer);
+        if (cerr_redirect_active) std::cerr.rdbuf(old_cerr_buffer);
         continue;
       }
 
@@ -334,9 +395,8 @@ int main() {
       catch (const fs::filesystem_error&) {
         std::cout << "cd: " << (args.size() > 1? args[1] : "") << ": No such file or directory" << "\n";
       }
-      continue;
     }
-    if (std::string path = find_command_in_path(command); !path.empty()) {
+    else if (std::string path = find_command_in_path(command); !path.empty()) {
       if (command.find(' ') != std::string::npos) {
         wrap_string(command, '\'');
       }
@@ -346,14 +406,16 @@ int main() {
       }
       std::string result= execute_command(rebuild_command);
       std::cout << result;
-      continue;
     }
-    std::cout << command << ": command not found\n";
-    if (redirect_active) {
+    else std::cout << command << ": command not found\n";
+
+    if (cout_redirect_active) {
       out_file.close();
       std::cout.rdbuf(old_cout_buffer);
     }
+    if (cerr_redirect_active) {
+      err_file.close();
+      std::cerr.rdbuf(old_cerr_buffer);
+    }
   }
-
-  return 0;
 }
