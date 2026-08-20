@@ -13,6 +13,8 @@
 #include <algorithm>
 #include <cctype>
 #include <fstream>
+#include <unistd.h>
+#include <sys/wait.h>
 
 namespace fs = std::filesystem;
 
@@ -266,6 +268,27 @@ static std::vector<std::string> Tokenize_input(const std::string& input_line) {
   return args;
 }
 
+static void execute_builtin(const std::string& command, std::vector<std::string>& args) {
+
+    if (command == "echo") {
+      for (size_t i{1}; i < args.size(); ++i) {
+        std::cout << args[i] << (i + 1 < args.size() ? " " : "");
+      }
+      std::cout << "\n";
+    }
+    else if (command == "type") {
+      if (args.size() < 2) std::cout << "type: missing operand \n";
+      else {
+        const std::string& target = args[1];
+        if (const auto it = std::ranges::find(builtins, target); it != builtins.end()) std::cout << *it << " is a shell builtin\n";
+        else if (const std::string path = find_command_in_path(target); !path.empty()) std::cout << target << " is " << path << "\n";
+        else std::cout << target << ": not found\n";
+      }
+    }
+    else if (command == "pwd") {
+        std::cout << fs::current_path().string() << "\n";
+    }
+}
 
 
 int main() {
@@ -294,18 +317,18 @@ int main() {
 
     std::string redirect_file;
     std::string err_redirect_file;
-    bool cout_redirect_active = false;
-    bool cerr_redirect_active = false;
-    bool append_mode = false;
-    bool err_append_mode = false;
+    bool out_redir = false;
+    bool err_redir = false;
+    bool out_app = false;
+    bool err_app = false;
 
     auto err_redir_it = std::ranges::find_if(args.begin(), args.end(),[](const std::string& arg){return arg == "2>" || arg == "2>>";});
 
     if (err_redir_it != args.end()) {
-      if (*err_redir_it == "2>>") err_append_mode = true;
+      if (*err_redir_it == "2>>") err_app = true;
       if (std::distance(args.begin(), err_redir_it) + 1 < args.size()) {
         err_redirect_file = *(err_redir_it + 1);
-        cerr_redirect_active = true;
+        err_redir = true;
         args.erase(err_redir_it, err_redir_it + 2);
       }
       else {
@@ -315,11 +338,11 @@ int main() {
     auto redir_it = std::ranges::find_if(args.begin(), args.end(),[](const std::string& arg){return arg == ">" || arg == "1>" || arg == ">>" || arg == "1>>";});
 
     if ( redir_it != args.end()) {
-      if (*redir_it == ">>" || *redir_it == "1>>") append_mode = true;
+      if (*redir_it == ">>" || *redir_it == "1>>") out_app = true;
 
       if (std::distance(args.begin(), redir_it) + 1 < args.size()) {
         redirect_file = *(redir_it + 1);
-        cout_redirect_active = true;
+        out_redir = true;
         args.erase(redir_it, redir_it + 2);
       }
       else {
@@ -333,80 +356,14 @@ int main() {
     }
     std::string command = args.front();
 
-    std::streambuf *old_cout_buffer = std::cout.rdbuf();
-    std::streambuf *old_cerr_buffer = std::cerr.rdbuf();
 
     std::ofstream out_file;
     std::ofstream err_file;
 
-    // 2> or 2>> output redirection
-    if (cerr_redirect_active) {
-      err_file.open(err_redirect_file, (err_append_mode ? std::ios::out | std::ios::app : std::ios::out | std::ios::trunc));
 
-      if (!err_file.is_open()) {
-        std::cerr << "Shell: failed to open file " << redirect_file << "\n";
-        if (cout_redirect_active) out_file.close();
-        if (cout_redirect_active) std::cout.rdbuf(old_cout_buffer);
-        if (cerr_redirect_active) std::cerr.rdbuf(old_cerr_buffer);
-        continue;
-      }
-      std::cerr.rdbuf(err_file.rdbuf());
-    }
 
-    // > or >> output redirection
-    if (cout_redirect_active) {
-        out_file.open(redirect_file, (append_mode ? std::ios::out | std::ios::app : std::ios::out | std::ios::trunc));
-
-      if (!out_file.is_open()) {
-        std::cerr << "Shell: failed to open file " << redirect_file << "\n";
-        if (cout_redirect_active) std::cout.rdbuf(old_cout_buffer);
-        if (cerr_redirect_active) std::cerr.rdbuf(old_cerr_buffer);
-        continue;
-      }
-      std::cout.rdbuf(out_file.rdbuf());
-    }
-
-    if (command == "exit") {
-      if (cout_redirect_active) std::cout.rdbuf(old_cout_buffer);
-      if (cerr_redirect_active) std::cerr.rdbuf(old_cerr_buffer);
-      break;
-    }
-    else if (command == "echo") {
-      for (size_t i{1}; i < args.size(); ++i) {
-        std::cout << args[i];
-        if (i + 1 < args.size()) std::cout << " ";
-      }
-      std::cout << "\n";
-    }
-    else if (command == "type") {
-      if (args.size() < 2) {
-        std::cout << "type: missing operand \n";
-      }
-      else {
-        const std::string& target = args[1];
-        if (auto it = std::ranges::find(builtins, target); it != builtins.end()) {
-          std::cout << *it << " is a shell builtin\n";
-        }
-        else {
-          if (std::string path = find_command_in_path(target); !path.empty()) {
-            std::cout << target << " is " << path << "\n";
-          }
-          else {
-            std::cout << target << ": not found\n";
-          }
-        }
-      }
-    }
-    else if (command == "pwd") {
-      try {
-        fs::path cwd = fs::current_path();
-        std::cout << cwd.string() << "\n";
-      }
-      catch (const fs::filesystem_error& e) {
-        std::cerr << "Error getting path : " << e.what() << "\n";
-      }
-    }
-    else if (command == "cd") {
+    if (command == "exit") break;
+    if (command == "cd") {
       std::vector<std::string>::value_type target_path = (args.size() > 1) ? args[1] : "";
       bool home_error = false;
       if (target_path.empty() || target_path.starts_with('~')) {
@@ -428,26 +385,29 @@ int main() {
           std::cout << "cd: " << (args.size() > 1? args[1] : "") << ": No such file or directory" << "\n";
         }
       }
+      continue;
     }
-    else if (std::string path = find_command_in_path(command); !path.empty()) {
-      if (command.find(' ') != std::string::npos) {
-        wrap_string(command, '\'');
-      }
-      std::string rebuild_command = command;
-      for (size_t i{1}; i < args.size(); ++i) {
-        rebuild_command += " " + args[i];
-      }
-      execute_command(rebuild_command);
-    }
-    else std::cout << command << ": command not found\n";
 
-    if (cout_redirect_active) {
-      out_file.close();
-      std::cout.rdbuf(old_cout_buffer);
-    }
-    if (cerr_redirect_active) {
-      err_file.close();
-      std::cerr.rdbuf(old_cerr_buffer);
+    if (pid_t pid = fork(); pid == 0) {
+      // CHILD PROCESS
+      // Standard C file redirection takes care of internal and external processes perfectly
+      if (out_redir) std::freopen(redirect_file.c_str(), out_app ? "a" : "w", stdout);
+      if (err_redir) std::freopen(err_redirect_file.c_str(), err_app ? "a" : "w", stderr);
+
+      if (std::ranges::find(builtins, command) != builtins.end()) {
+        execute_builtin(command, args);
+        std::exit(0);
+      } else if (std::string binary_path = find_command_in_path(command); !binary_path.empty()) {
+        std::vector<char*> c_args;
+        for (auto& arg : args) c_args.push_back(const_cast<char*>(arg.c_str()));
+        c_args.push_back(nullptr);
+        execv(binary_path.c_str(), c_args.data());
+      } else {
+        std::cout << command << ": command not found\n";
+      }
+      std::exit(1);
+    }else {
+    waitpid(pid, nullptr, 0); // PARENT SHELL WAITS
     }
   }
 }
