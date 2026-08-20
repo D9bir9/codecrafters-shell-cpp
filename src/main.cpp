@@ -6,8 +6,12 @@
 #include <sstream>
 #include <memory>
 #include <array>
+#include <readline/readline.h>
+#include <readline/history.h>
 
 namespace fs = std::filesystem;
+
+const std::vector<std::string> builtins = {"echo", "exit", "type", "pwd"};
 
 #ifdef _WIN32
   const char PATH_DELIM = ';';
@@ -18,6 +22,44 @@ namespace fs = std::filesystem;
   constexpr std::string EXE_EXT;
   constexpr char PATH_SEP = '/';
 #endif
+
+static char* command_generator(const char* text, const int state) {
+  static size_t list_index, len;
+  const std::string prefix(text);
+
+  if (!state) {
+    list_index = 0;
+    len = prefix.length();
+  }
+  while (list_index < builtins.size()) {
+    const std::string& cmd = builtins[list_index];
+    list_index++;
+    if (cmd.compare(0, len, prefix) == 0) {
+      const auto match = static_cast<char *>(malloc(cmd.length() + 1));
+      strcpy(match, cmd.c_str());
+      return match;
+    }
+  }
+  return nullptr;
+}
+
+static char** shell_completion(const char* text, int start, int end) {
+  char** matches = nullptr;
+  rl_attempted_completion_over = 1;
+  if (start == 0) {
+    matches = rl_completion_matches(text, command_generator);
+  }
+  else {
+    matches = rl_completion_matches(text, rl_filename_completion_function);
+  }
+  return matches;
+}
+
+static void initialize_readline() {
+  rl_attempted_completion_function = shell_completion;
+  rl_bind_key('\t', rl_complete);
+  rl_completion_append_character = ' ';
+}
 
 // Reads from environment variables
 static std::optional<std::string> get_env_var(const std::string& key) {
@@ -162,9 +204,8 @@ static void process_input(const char delim, std::string& input, std::string& lin
     }
 }
 
-static void get_input_and_format_input(std::string& input, std::string& line, std::string& command, std::string& fcmd) {
-  std::getline(std::cin, line);
-
+static void get_input_and_format_input(std::string& input, std::string& line, std::string& command, std::string& fcmd, std::stringstream& ss_) {
+  std::getline(ss_, line);
   if (line.starts_with('\'')) {
     process_input('\'', input,line, command, fcmd);
   }
@@ -184,8 +225,11 @@ int main() {
   std::cout << std::unitbuf;
   std::cerr << std::unitbuf;
 
+  initialize_readline();
+
+  using_history();
+
   // TODO: Uncomment the code below to pass the first stage
-  std::vector<std::string> builtins = {"echo", "exit", "type", "pwd"};
   //REPL Read-Eval-Print-Loop
   while (true) {
     std::string command;
@@ -193,9 +237,20 @@ int main() {
     std::string line;
     std::string formatted_command;
 
-    std::cout << "$ ";
+    //std::cout << "$ ";
 
-   get_input_and_format_input(input, line, command, formatted_command);
+    char* raw_input = readline("$ ");
+    if (raw_input == nullptr) break;
+
+    std::string command_(raw_input);
+    free(raw_input);
+
+    if (command_.empty()) continue;
+    add_history(command_.c_str());
+
+    std::stringstream ss_(command_);
+
+   get_input_and_format_input(input, line, command, formatted_command, ss_);
 
 
     if (formatted_command == "echo") {
