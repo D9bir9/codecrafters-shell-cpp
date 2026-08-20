@@ -299,7 +299,6 @@ int main() {
     bool append_mode = false;
     bool err_append_mode = false;
 
-    auto redir_it = std::ranges::find_if(args.begin(), args.end(),[](const std::string& arg){return arg == ">" || arg == "1>" || arg == ">>" || arg == "1>>";});
     auto err_redir_it = std::ranges::find_if(args.begin(), args.end(),[](const std::string& arg){return arg == "2>" || arg == "2>>";});
 
     if (err_redir_it != args.end()) {
@@ -313,6 +312,7 @@ int main() {
         std::cout << "Shell: syntax error near unexpected token 'newline' \n";
       }
     }
+    auto redir_it = std::ranges::find_if(args.begin(), args.end(),[](const std::string& arg){return arg == ">" || arg == "1>" || arg == ">>" || arg == "1>>";});
 
     if ( redir_it != args.end()) {
       if (*redir_it == ">>" || *redir_it == "1>>") append_mode = true;
