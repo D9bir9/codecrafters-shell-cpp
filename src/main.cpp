@@ -371,9 +371,9 @@ int main() {
           if (target_path.empty()) target_path = *home;
           else target_path.replace(0, 1, *home);
         }
-      }
-      else {
-        home_error = true;
+        else {
+          home_error = true;
+        }
       }
 
       if (!home_error) {
