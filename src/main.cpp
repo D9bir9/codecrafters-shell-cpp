@@ -240,9 +240,30 @@ static char* custom_path_generator(const char* text, const int state) {
         raw_script_path = raw_script_path.substr(1, raw_script_path.length() - 2);
       }
 
-      // Build the execution command passing the text prefix to complete as an argument
-      // Example: /path/to/script "typed_prefix"
-      const std::string exec_cmd = raw_script_path + " " + wrap_string(text, '"');
+      // 2. Identify the word being completed (argv[2]) and the previous word (argv[3])
+      const std::string current_word = text; // e.g., "set"
+      std::string prev_word;
+
+      // Find where we are in the token stream to grab the previous word safely
+      for (size_t i = 1; i < tokens.size(); ++i) {
+        if (tokens[i] == current_word && i > 0) {
+          prev_word = tokens[i - 1];
+          break;
+        }
+      }
+      // Fallback if the token stream layout differs slightly
+      if (prev_word.empty() && tokens.size() >= 2) {
+        prev_word = tokens[tokens.size() - 2];
+      }
+      if (prev_word.empty()) {
+        prev_word = cmd; // Default fallback to the command itself
+      }
+
+      // 3. Build the full, standard arguments block: script command current_word prev_word
+      const std::string exec_cmd = raw_script_path + " " +
+                             wrap_string(cmd, '"') + " " +
+                             wrap_string(current_word, '"') + " " +
+                             wrap_string(prev_word, '"');
 
       // Open a pipe to read the script's stdout output line by line
       if (FILE* fp = popen(exec_cmd.c_str(), "r")) {
