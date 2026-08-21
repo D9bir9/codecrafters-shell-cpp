@@ -44,6 +44,7 @@ namespace {
 
 static char* command_generator(const char* text, const int state) {
   static size_t list_index, len;
+  static int filename_state = 0;
   const std::string prefix(text);
 
   if (!state) {
@@ -59,10 +60,15 @@ static char* command_generator(const char* text, const int state) {
       return match;
     }
   }
+  char* file_match = rl_filename_completion_function(text, filename_state);
+  if (file_match != nullptr) {
+    filename_state = 1; // Mark state as active so subsequent passes continue the file list
+    return file_match;  // Return the path string allocated by Readline
+  }
   return nullptr;
 }
 
-static char** shell_completion(const char* text, int start, int end) {
+static char** shell_completion(const char* text, const int start, int end) {
   char** matches = nullptr;
   rl_attempted_completion_over = 1;
   if (start == 0) {
