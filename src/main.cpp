@@ -63,11 +63,11 @@ static char* command_generator(const char* text, const int state) {
       strcpy(match, cmd.c_str());
       return match;
     }
-  }
-  if (file_state == 0) {
-    auto match = rl_filename_completion_function(text, file_state);
-    file_state = 1;
-    return match;
+    if (file_state == 0) {
+      const auto match = rl_filename_completion_function(text, file_state);
+      file_state = 1;
+      return match;
+    }
   }
 
   return nullptr;
