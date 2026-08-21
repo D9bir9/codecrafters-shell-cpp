@@ -219,18 +219,7 @@ static std::vector<std::string> Tokenize_input(const std::string& input_line) {
     }
 
     if (ch == '\\' && !in_single_quote && !completion_flag) {
-      // Check if there is a next character to peek at
-      if (i + 1 < input_line.size()) {
-        char next_ch = input_line[i + 1];
-        // Only escape if it precedes a special character
-        if (next_ch == ' ' || next_ch == '\'' || next_ch == '"' || next_ch == '\\') {
-          escape = true;
-          continue; // Skip adding the '\' itself, next loop iteration will add next_ch
-        }
-      }
-      // If it's a path separator (e.g., \p or \u), treat it as a literal character
-      current_token.push_back(ch);
-      token_has_content = true;
+      escape = true;
       continue;
     }
 
