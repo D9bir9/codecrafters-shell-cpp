@@ -44,13 +44,11 @@ namespace {
 
 static char* command_generator(const char* text, const int state) {
   static size_t list_index, len;
-  static int filename_state = 0;
   const std::string prefix(text);
 
   if (!state) {
     list_index = 0;
     len = prefix.length();
-    filename_state = 0;
   }
 
   // Pass 1: Scan custom shell built-in vector commands
@@ -65,14 +63,6 @@ static char* command_generator(const char* text, const int state) {
     }
   }
 
-  // Pass 2: Fall back to native disk directory listings
-  char* file_match = rl_filename_completion_function(text, filename_state);
-  if (file_match != nullptr) {
-    filename_state = 1;
-    return file_match;
-  }
-
-  filename_state = 0;
   return nullptr;
 }
 
@@ -80,7 +70,6 @@ static char** shell_completion(const char* text, const int start, int end) {
 
   rl_attempted_completion_over = 1;
   if (start == 0) {
-    rl_filename_completion_desired = 1;
     return rl_completion_matches(text, command_generator);
   }
   return rl_completion_matches(text, rl_filename_completion_function);
@@ -123,8 +112,8 @@ static std::string find_command_in_path(const std::string& command) {
   while (std::getline(ss, dir, PATH_DELIM)) {
     if (dir.empty()) continue;
 
-    if (fs::path fullpath = fs::path(dir) / cmd_with_extension; is_executable(fullpath)) {
-      return fullpath.string();
+    if (fs::path full_path = fs::path(dir) / cmd_with_extension; is_executable(full_path)) {
+      return full_path.string();
     }
   }
   return "";
@@ -288,19 +277,19 @@ static void execute_pipeline(const std::vector<CommandStage>& stages) {
         dup2(pipe_fds[1], STDOUT_FILENO);
         close(pipe_fds[1]);
       }
-      const auto& cmd = stages[i];
-      if (cmd.out_redir) std::freopen(cmd.out_file.c_str(), cmd.out_app ? "a" : "w", stdout);
-      if (cmd.err_redir) std::freopen(cmd.err_file.c_str(), cmd.err_app ? "a" : "w", stderr);
+      const auto&[args, out_file, err_file, out_redir, err_redir, out_app, err_app] = stages[i];
+      if (out_redir) std::freopen(out_file.c_str(), out_app ? "a" : "w", stdout);
+      if (err_redir) std::freopen(err_file.c_str(), err_app ? "a" : "w", stderr);
 
       // 4. Route binary path discovery
-      const std::string command = cmd.args.front();
+      const std::string command = args.front();
       if (std::ranges::find(builtins, command) != builtins.end()) {
-        execute_builtin(command, cmd.args);
+        execute_builtin(command, args);
         std::exit(0);
       }
       if (const std::string binary_path = find_command_in_path(command); !binary_path.empty()) {
         std::vector<char*> c_args;
-        for (const auto& arg : cmd.args) c_args.push_back(const_cast<char*>(arg.c_str()));
+        for (const auto& arg : args) c_args.push_back(const_cast<char*>(arg.c_str()));
         c_args.push_back(nullptr);
 
         execv(binary_path.c_str(), c_args.data());
