@@ -77,7 +77,7 @@ static char** shell_completion(const char* text, const int start, int end) {
 
   rl_attempted_completion_over = 1;
   if (start == 0) {
-    rl_filename_completion_desired = 1;
+    rl_completion_suppress_append = 1;
     return rl_completion_matches(text, command_generator);
   }
   return rl_completion_matches(text, rl_filename_completion_function);
@@ -87,7 +87,6 @@ static char** shell_completion(const char* text, const int start, int end) {
 static void initialize_readline() {
   rl_attempted_completion_function = shell_completion;
   rl_bind_key('\t', rl_complete);
-  rl_completion_append_character = ' ';
 }
 
 // Reads from environment variables
