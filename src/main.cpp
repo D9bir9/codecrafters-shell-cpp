@@ -15,6 +15,8 @@
 #include <fstream>
 #include <unistd.h>
 #include <sys/wait.h>
+#include <sys/stat.h>
+#include <dirent.h>
 
 namespace fs = std::filesystem;
 
@@ -42,6 +44,55 @@ namespace {
   };
 }
 
+char* executable_generator(const char* text, int state) {
+  static DIR* dir = nullptr;
+  static std::string path;
+  struct dirent* entry;
+
+  // Reset state on first call
+  if (state == 0) {
+    if (dir) {
+      closedir(dir);
+    }
+    // Use current directory for this basic example
+    path = "./";
+    dir = opendir(path.c_str());
+  }
+
+  if (!dir) {
+    return nullptr;
+  }
+
+  // Read directory entries
+  while ((entry = readdir(dir)) != nullptr) {
+    std::string name = entry->d_name;
+
+    // Skip current and parent directory shortcuts
+    if (name == "." || name == "..") {
+      continue;
+    }
+
+    // Match the prefix typed by the user
+    if (name.compare(0, strlen(text), text) == 0) {
+      std::string full_path = path + name;
+
+      // Check if the file is a regular file and executable
+      struct stat statbuf{};
+      if (stat(full_path.c_str(), &statbuf) == 0 && S_ISREG(statbuf.st_mode)) {
+        if (access(full_path.c_str(), X_OK) == 0) {
+          // Readline expects a dynamically allocated C-string
+          return strdup(name.c_str());
+        }
+      }
+    }
+  }
+
+  // Clean up when done
+  closedir(dir);
+  dir = nullptr;
+  return nullptr;
+}
+
 static char* command_generator(const char* text, const int state) {
   static size_t list_index, len;
   static int file_state;
@@ -65,7 +116,7 @@ static char* command_generator(const char* text, const int state) {
     }
   }
   if (file_state == 0) {
-    auto match = rl_filename_completion_function(text, file_state);
+    auto match = executable_generator(text, file_state);
     file_state = 1;
     return match;
   }
@@ -75,13 +126,10 @@ static char* command_generator(const char* text, const int state) {
 
 static char** shell_completion(const char* text, const int start, int end) {
 
-  rl_attempted_completion_over = 1;
   if (start == 0) {
-    rl_completion_suppress_append = 1;
     return rl_completion_matches(text, command_generator);
   }
   return rl_completion_matches(text, rl_filename_completion_function);
-
 }
 
 static void initialize_readline() {
