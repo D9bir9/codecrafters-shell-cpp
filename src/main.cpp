@@ -44,11 +44,13 @@ namespace {
 
 static char* command_generator(const char* text, const int state) {
   static size_t list_index, len;
+  static int file_state;
   const std::string prefix(text);
 
   if (!state) {
     list_index = 0;
     len = prefix.length();
+    file_state = 0;
   }
 
   // Pass 1: Scan custom shell built-in vector commands
@@ -62,6 +64,11 @@ static char* command_generator(const char* text, const int state) {
       return match;
     }
   }
+  if (file_state == 0) {
+    auto match = rl_filename_completion_function(text, file_state);
+    file_state = 1;
+    return match;
+  }
 
   return nullptr;
 }
@@ -70,6 +77,7 @@ static char** shell_completion(const char* text, const int start, int end) {
 
   rl_attempted_completion_over = 1;
   if (start == 0) {
+    rl_filename_completion_desired = 1;
     return rl_completion_matches(text, command_generator);
   }
   return rl_completion_matches(text, rl_filename_completion_function);
