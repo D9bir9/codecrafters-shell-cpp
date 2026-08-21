@@ -233,7 +233,7 @@ static char* custom_path_generator(const char* text, const int state) {
     if (tokens.empty()) return nullptr;
     std::string complete_line;
     for (const auto & token : tokens) {
-      complete_line += token;
+      complete_line += " " + token;
     }
     setenv("COMP_LINE", complete_line.c_str(), 1);
     setenv("COMP_POINT", std::to_string(complete_line.length()).c_str(), 1);
