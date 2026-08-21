@@ -44,6 +44,14 @@ namespace {
   };
 }
 
+// Reads from environment variables
+static std::optional<std::string> get_env_var(const std::string& key) {
+  if (const char* var = std::getenv(key.c_str()); var == nullptr) {
+    return std::nullopt;
+  }
+  else return std::string(var);
+}
+
 char* executable_generator(const char* text, int state) {
   static DIR* dir = nullptr;
   static std::string path;
@@ -55,7 +63,7 @@ char* executable_generator(const char* text, int state) {
       closedir(dir);
     }
     // Use current directory for this basic example
-    path = "./";
+    path = *get_env_var("$PATH");
     dir = opendir(path.c_str());
   }
 
@@ -135,14 +143,6 @@ static char** shell_completion(const char* text, const int start, int end) {
 static void initialize_readline() {
   rl_attempted_completion_function = shell_completion;
   rl_bind_key('\t', rl_complete);
-}
-
-// Reads from environment variables
-static std::optional<std::string> get_env_var(const std::string& key) {
-  if (const char* var = std::getenv(key.c_str()); var == nullptr) {
-    return std::nullopt;
-  }
-  else return std::string(var);
 }
 
 // Checks if a path is executable
