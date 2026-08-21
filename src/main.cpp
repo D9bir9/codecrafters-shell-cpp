@@ -15,10 +15,12 @@
 #include <fstream>
 #include <unistd.h>
 #include <sys/wait.h>
+#include <unordered_map>
 
 namespace fs = std::filesystem;
 
 const std::vector<std::string> builtins = {"echo", "exit", "type", "pwd", "cd", "complete"};
+static std::unordered_map<std::string, std::string> completion_paths;
 
 #ifdef _WIN32
   constexpr char PATH_DELIM = ';';
@@ -167,6 +169,29 @@ static void trim_right(std::string &s) {
   }
 }
 
+static std::string wrap_string(const std::string &s, const char ch) {
+  // If we aren't using single quotes, fall back to basic wrapping
+  if (ch != '\'') {
+    std::string out = s;
+    out.insert(0, 1, ch);
+    out.push_back(ch);
+    return out;
+  }
+
+  // Robust Single-Quote Preservation
+  std::string out = "'";
+  for (const char c : s) {
+    if (c == '\'') {
+      // Close quote, append literal quote, reopen quote
+      out += "'\\''";
+    } else {
+      out += c;
+    }
+  }
+  out += '\'';
+  return out;
+}
+
 static void trim(std::string &s) {
   trim_left(s);
   trim_right(s);
@@ -180,6 +205,7 @@ static std::vector<std::string> Tokenize_input(const std::string& input_line) {
   bool in_double_quote = false;
   bool escape = false;
   bool token_has_content = false;
+  bool completion_flag = false;
 
 
   for (size_t i{}; i < input_line.size(); ++i) {
@@ -192,8 +218,19 @@ static std::vector<std::string> Tokenize_input(const std::string& input_line) {
       continue;
     }
 
-    if (ch == '\\' && !in_single_quote) {
-      escape = true;
+    if (ch == '\\' && !in_single_quote && !completion_flag) {
+      // Check if there is a next character to peek at
+      if (i + 1 < input_line.size()) {
+        char next_ch = input_line[i + 1];
+        // Only escape if it precedes a special character
+        if (next_ch == ' ' || next_ch == '\'' || next_ch == '"' || next_ch == '\\') {
+          escape = true;
+          continue; // Skip adding the '\' itself, next loop iteration will add next_ch
+        }
+      }
+      // If it's a path separator (e.g., \p or \u), treat it as a literal character
+      current_token.push_back(ch);
+      token_has_content = true;
       continue;
     }
 
@@ -278,11 +315,6 @@ static void execute_builtin(const std::string& command, const std::vector<std::s
   }
   else if (command == "pwd") {
       std::cout << fs::current_path().string() << "\n";
-  }
-  else if (command == "complete") {
-    if (args[1] == "-p") {
-      std::cout << "complete: " << args[2] << ": no completion specification\n";
-    }
   }
 }
 
@@ -463,6 +495,25 @@ int main() {
         }
         catch (const fs::filesystem_error&) {
           std::cout << "cd: " << (cd_arg.size() > 1? cd_arg[1] : "") << ": No such file or directory" << "\n";
+        }
+      }
+    }
+    else if (command == "complete") {
+      if (args[1] == "-p") {
+        if (args.size() < 3) std::cout << "complete: missing operand \n";
+        else {
+          if (completion_paths.contains(args[2])) {
+            std::cout << "complete -C '" << completion_paths[args[2]] << "' " << args[2] << "\n";
+          }
+          else {
+            std::cout << "complete: " << args[2] << ": no completion specification\n";
+          }
+        }
+      }
+      else if (args[1] == "-C") {
+        if (args.size() < 4) std::cout << "complete: missing operand \n";
+        else {
+          completion_paths.insert_or_assign(args[3], args[2]);
         }
       }
     }
