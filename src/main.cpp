@@ -18,7 +18,7 @@
 
 namespace fs = std::filesystem;
 
-const std::vector<std::string> builtins = {"echo", "exit", "type", "pwd", "cd", "Builtin"};
+const std::vector<std::string> builtins = {"echo", "exit", "type", "pwd", "cd", "complete"};
 
 #ifdef _WIN32
   constexpr char PATH_DELIM = ';';
@@ -93,7 +93,7 @@ static char* command_generator(const char* text, const int state) {
     path_match_index = 0;
 
     // Collect all matching commands from the system PATH once per completion request
-    if (auto path_opt = get_env_var("PATH"); path_opt.has_value()) {
+    if (const auto path_opt = get_env_var("PATH"); path_opt.has_value()) {
       std::stringstream ss(*path_opt);
       std::string dir;
       while (std::getline(ss, dir, PATH_DELIM)) {
