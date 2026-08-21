@@ -18,7 +18,7 @@
 
 namespace fs = std::filesystem;
 
-const std::vector<std::string> builtins = {"echo", "exit", "type", "pwd", "cd"};
+const std::vector<std::string> builtins = {"echo", "exit", "type", "pwd", "cd", "Builtin"};
 
 #ifdef _WIN32
   constexpr char PATH_DELIM = ';';
@@ -49,25 +49,25 @@ static char* command_generator(const char* text, const int state) {
 
   if (!state) {
     list_index = 0;
-    len = prefix.length();
     file_state = 0;
+    len = prefix.length();
   }
 
-  // Pass 1: Scan custom shell built-in vector commands
+  // Scan custom shell built-in vector commands
   while (list_index < builtins.size()) {
     const std::string& cmd = builtins[list_index];
-    list_index++; // Safely advance index to prep the next call state layer
+    list_index++;
 
     if (cmd.compare(0, len, prefix) == 0) {
       const auto match = static_cast<char *>(malloc(cmd.length() + 1));
       strcpy(match, cmd.c_str());
       return match;
     }
-    if (file_state == 0) {
-      const auto match = rl_filename_completion_function(text, file_state);
-      file_state = 1;
-      return match;
-    }
+  }
+  if (file_state == 0) {
+    auto match = rl_filename_completion_function(text, file_state);
+    file_state = 1;
+    return match;
   }
 
   return nullptr;
@@ -87,7 +87,7 @@ static char** shell_completion(const char* text, const int start, int end) {
 static void initialize_readline() {
   rl_attempted_completion_function = shell_completion;
   rl_bind_key('\t', rl_complete);
-  rl_completion_append_character = '\0';
+  rl_completion_append_character = ' ';
 }
 
 // Reads from environment variables
