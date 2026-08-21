@@ -11,13 +11,14 @@
 #include <ranges>
 #include <algorithm>
 #include <cctype>
+#include <complex>
 #include <fstream>
 #include <unistd.h>
 #include <sys/wait.h>
 
 namespace fs = std::filesystem;
 
-const std::vector<std::string> builtins = {"echo", "exit", "type", "pwd"};
+const std::vector<std::string> builtins = {"echo", "exit", "type", "pwd", "cd"};
 
 #ifdef _WIN32
   constexpr char PATH_DELIM = ';';
@@ -28,6 +29,18 @@ const std::vector<std::string> builtins = {"echo", "exit", "type", "pwd"};
   constexpr const char* EXE_EXT = "";
   constexpr char PATH_SEP = '/';
 #endif
+
+namespace {
+  struct CommandStage {
+    std::vector<std::string> args;
+    std::string out_file;
+    std::string err_file;
+    bool out_redir = false;
+    bool err_redir = false;
+    bool out_app = false;
+    bool err_app = false;
+  };
+}
 
 static char* command_generator(const char* text, const int state) {
   static size_t list_index, len;
@@ -175,58 +188,33 @@ static std::vector<std::string> Tokenize_input(const std::string& input_line) {
       continue;
     }
 
-    if (ch == '>' && !in_single_quote && !in_double_quote) {
-      if (!current_token.empty() || token_has_content) {
-        args.push_back(current_token);
-        current_token.clear();
-        token_has_content = false;
-      }
-      if (i + 1 < input_line.size() && input_line[i + 1] == '>') {
-        args.emplace_back(">>");
-        i++;
-      }
-      else {
-        args.emplace_back(">");
-      }
-      continue;
-    }
+    if (!in_single_quote && !in_double_quote) {
+      if (ch == '>' || ch == '|' ||
+         ((ch == '1' || ch == '2') && i + 1 < input_line.size() && input_line[i + 1] == '>')) {
 
-    if (ch == '1' && !in_single_quote && !in_double_quote) {
-      if (i + 1 < input_line.size() && input_line[i + 1] == '>') {
         if (!current_token.empty() || token_has_content) {
           args.push_back(current_token);
           current_token.clear();
           token_has_content = false;
         }
-        if (i + 2 < input_line.size() && input_line[i + 2] == '>') {
-          args.emplace_back("1>>");
-          i += 2;
-        }
-        else {
-          args.emplace_back("1>");
-          i++;
-        }
-        continue;
-      }
-    }
 
-    if (ch == '2' && !in_single_quote && !in_double_quote) {
-      if (i + 1 < input_line.size() && input_line[i + 1] == '>') {
-        if (!current_token.empty() || token_has_content) {
-          args.push_back(current_token);
-          current_token.clear();
-          token_has_content = false;
+        if (ch == '|') {
+          args.emplace_back("|");
         }
-        if (i + 2 < input_line.size() && input_line[i + 2] == '>') {
-          args.emplace_back("2>>");
-          i += 2;
+        else if (ch == '>') {
+          if (i + 1 < input_line.size() && input_line[i + 1] == '>') { args.emplace_back(">>"); i++; }
+          else args.emplace_back(">");
         }
-        else {
-          args.emplace_back("2>");
-          i++;
+        else if (ch == '1') {
+          if (i + 2 < input_line.size() && input_line[i + 1] == '>' && input_line[i + 2] == '>') { args.emplace_back("1>>"); i += 2; }
+          else { args.emplace_back("1>"); i++; }
+        }
+        else if (ch == '2') {
+          if (i + 2 < input_line.size() && input_line[i + 1] == '>' && input_line[i + 2] == '>') { args.emplace_back("2>>"); i += 2; }
+          else { args.emplace_back("2>"); i++; }
         }
         continue;
-      }
+         }
     }
 
     // Normal character
@@ -262,6 +250,68 @@ static void execute_builtin(const std::string& command, const std::vector<std::s
     }
 }
 
+static void execute_pipeline(const std::vector<CommandStage>& stages) {
+  const size_t num_commands = stages.size();
+  int in_fd = 0;
+  std::vector<pid_t> child_pids;
+  for (size_t i{}; i < num_commands; ++i) {
+    int pipe_fds[2];
+
+    if (i < num_commands - 1) {
+      if(pipe(pipe_fds) < 0) {
+        std::cout << "Shell: pipeline allocation failed\n";
+        return;
+      }
+    }
+
+    if (const pid_t pid = fork(); pid == 0) {
+        if (in_fd != 0) {
+          dup2(in_fd, STDIN_FILENO);
+          close(in_fd);
+        }
+
+      if (i < num_commands - 1) {
+        close(pipe_fds[0]);
+        dup2(pipe_fds[1], STDOUT_FILENO);
+        close(pipe_fds[1]);
+      }
+      const auto& cmd = stages[i];
+      if (cmd.out_redir) std::freopen(cmd.out_file.c_str(), cmd.out_app ? "a" : "w", stdout);
+      if (cmd.err_redir) std::freopen(cmd.err_file.c_str(), cmd.err_app ? "a" : "w", stderr);
+
+      // 4. Route binary path discovery
+      const std::string command = cmd.args.front();
+      if (std::ranges::find(builtins, command) != builtins.end()) {
+        execute_builtin(command, cmd.args);
+        std::exit(0);
+      }
+      if (const std::string binary_path = find_command_in_path(command); !binary_path.empty()) {
+        std::vector<char*> c_args;
+        for (const auto& arg : cmd.args) c_args.push_back(const_cast<char*>(arg.c_str()));
+        c_args.push_back(nullptr);
+
+        execv(binary_path.c_str(), c_args.data());
+      }
+      else std::cerr << command << ": command not found\n";
+      std::exit(1);
+    }
+    else if (pid > 0) { // --- PARENT ENGINE ---
+      child_pids.push_back(pid);
+
+      // Close resource tracking handles inside the master loop context
+      if (in_fd != 0) close(in_fd);
+      if (i < num_commands - 1) {
+        close(pipe_fds[1]);
+        in_fd = pipe_fds[0];
+      }
+    }
+  }
+  // Master shell sync lock: Wait for ALL spawned processes to finish
+  for (const pid_t pid : child_pids) {
+    waitpid(pid, nullptr, 0);
+  }
+}
+
 
 int main() {
   // Flush after every std::cout / std:cerr
@@ -287,60 +337,86 @@ int main() {
     std::vector<std::string> args = Tokenize_input(line);
     if (args.empty()) continue;
 
-    std::string redirect_file;
-    std::string err_redirect_file;
-    bool out_redir = false;
-    bool err_redir = false;
-    bool out_app = false;
-    bool err_app = false;
+    std::vector<CommandStage> pipeline_stages;
+    CommandStage current_stage;
 
-    if (auto err_redir_it = std::ranges::find_if(args.begin(), args.end(),[](const std::string& arg){return arg == "2>" || arg == "2>>";}); err_redir_it != args.end()) {
-      if (*err_redir_it == "2>>") err_app = true;
-      if (std::distance(args.begin(), err_redir_it) + 1 < args.size()) {
-        err_redirect_file = *(err_redir_it + 1);
-        err_redir = true;
-        args.erase(err_redir_it, err_redir_it + 2);
-      }
-      else {
-        std::cout << "Shell: syntax error near unexpected token 'newline' \n";
-      }
-    }
-
-    if (auto redir_it = std::ranges::find_if(args.begin(), args.end(),[](const std::string& arg){return arg == ">" || arg == "1>" || arg == ">>" || arg == "1>>";}); redir_it != args.end()) {
-      if (*redir_it == ">>" || *redir_it == "1>>") out_app = true;
-
-      if (std::distance(args.begin(), redir_it) + 1 < args.size()) {
-        redirect_file = *(redir_it + 1);
-        out_redir = true;
-        args.erase(redir_it, redir_it + 2);
-      }
-      else {
-        std::cout << "Shell: syntax error near unexpected token 'newline' \n";
-      }
-    }
-
-    if (args.empty()) continue;
     for (size_t i{}; i < args.size(); ++i) {
-      trim(args[i]);
+      if (args[i] == "|") {
+        if (current_stage.args.empty()) {
+          std::cout << "Shell: syntax error near unexpected token '|'\n";
+          pipeline_stages.clear();
+          break;
+        }
+        pipeline_stages.push_back(current_stage);
+        current_stage = CommandStage();
+      }
+      else {
+        current_stage.args.push_back(args[i]);
+      }
     }
-    std::string& command = args.front();
 
+    if (!current_stage.args.empty()) {
+      pipeline_stages.push_back(current_stage);
+    }
 
-    std::ofstream out_file;
-    std::ofstream err_file;
+    if (pipeline_stages.empty()) continue;
+
+    if (args.back() == "|") {
+      std::cout << "Shell: syntax error near unexpected token '|'\n";
+      continue;
+    }
+
+    bool syntax_error = false;
+    for (auto& stage : pipeline_stages) {
+      if (auto err_it = std::ranges::find_if(stage.args.begin(), stage.args.end(), [](auto& a){ return a == "2>" || a == "2>>"; }); err_it != stage.args.end()) {
+        stage.err_app = (*err_it == "2>>");
+        stage.err_redir = true;
+        if (std::distance(stage.args.begin(), err_it) + 1 < stage.args.size()) {
+          stage.err_file = *(err_it + 1);
+          stage.args.erase(err_it, err_it + 2);
+        } else {
+          std::cout << "Shell: syntax error near unexpected token 'newline'\n";
+          syntax_error = true;
+          break;
+        }
+      }
+      if (auto out_it = std::ranges::find_if(stage.args.begin(), stage.args.end(), [](auto& a){ return a == ">" || a == "1>" || a == ">>" || a == "1>>"; }); out_it != stage.args.end()) {
+        stage.out_app = (*out_it == ">>" || *out_it == "1>>");
+        stage.out_redir = true;
+        if (std::distance(stage.args.begin(), out_it) + 1 < stage.args.size()) {
+          stage.out_file = *(out_it + 1);
+          stage.args.erase(out_it, out_it + 2);
+        } else {
+          std::cout << "Shell: syntax error near unexpected token 'newline'\n";
+          syntax_error = true;
+          break;
+        }
+      }
+      if (!stage.args.empty()) {
+        for (size_t k{1}; k < stage.args.size(); ++k) {
+          trim(stage.args[k]);
+        }
+      }
+    }
+
+    if (syntax_error) continue;
+
+    std::string command = pipeline_stages.front().args.front();
 
 
 
     if (command == "exit") break;
     if (command == "cd") {
-      std::vector<std::string>::value_type target_path = (args.size() > 1) ? args[1] : "";
+      auto cd_arg = pipeline_stages.front().args;
+      std::string target_path = (cd_arg.size() > 1) ? cd_arg[1] : "";
       bool home_error = false;
       if (target_path.empty() || target_path.starts_with('~')) {
         if (auto home = get_env_var("HOME"); home.has_value()) {
-          if (target_path.empty()) target_path = *home;
-          else target_path.replace(0, 1, *home);
+          if (target_path.empty() || target_path == "~") target_path = *home;
+          else if (target_path.starts_with("~/")) target_path.replace(0, 1, *home);
         }
         else {
+          std::cout << "HOME not set\n";
           home_error = true;
         }
       }
@@ -350,33 +426,12 @@ int main() {
           fs::current_path(fs::path(target_path));
         }
         catch (const fs::filesystem_error&) {
-          std::cout << "cd: " << (args.size() > 1? args[1] : "") << ": No such file or directory" << "\n";
+          std::cout << "cd: " << (cd_arg.size() > 1? cd_arg[1] : "") << ": No such file or directory" << "\n";
         }
       }
-      continue;
     }
-
-    if (pid_t pid = fork(); pid == 0) {
-      // CHILD PROCESS
-      // Standard C file redirection takes care of internal and external processes perfectly
-      if (out_redir) std::freopen(redirect_file.c_str(), out_app ? "a" : "w", stdout);
-      if (err_redir) std::freopen(err_redirect_file.c_str(), err_app ? "a" : "w", stderr);
-
-      if (std::ranges::find(builtins, command) != builtins.end()) {
-        execute_builtin(command, args);
-        std::exit(0);
-      }
-      if (std::string binary_path = find_command_in_path(command); !binary_path.empty()) {
-        std::vector<char*> c_args;
-        for (auto& arg : args) c_args.push_back(const_cast<char*>(arg.c_str()));
-        c_args.push_back(nullptr);
-        execv(binary_path.c_str(), c_args.data());
-      } else {
-        std::cout << command << ": command not found\n";
-      }
-      std::exit(1);
-    }else {
-    waitpid(pid, nullptr, 0); // PARENT SHELL WAITS
+    else {
+      execute_pipeline(pipeline_stages);
     }
   }
 }
