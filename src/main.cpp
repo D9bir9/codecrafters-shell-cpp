@@ -82,73 +82,6 @@ static std::string find_command_in_path(const std::string& command) {
   return "";
 }
 
-static char* command_generator(const char* text, const int state) {
-  static size_t list_index, len;
-  static std::vector<std::string> path_matches;
-  static size_t path_match_index;
-  const std::string prefix(text);
-
-  if (!state) {
-    list_index = 0;
-    len = prefix.length();
-    path_matches.clear();
-    path_match_index = 0;
-
-    // Collect all matching commands from the system PATH once per completion request
-    if (const auto path_opt = get_env_var("PATH"); path_opt.has_value()) {
-      std::stringstream ss(*path_opt);
-      std::string dir;
-      while (std::getline(ss, dir, PATH_DELIM)) {
-        if (dir.empty()) continue;
-        try {
-          if (fs::exists(dir) && fs::is_directory(dir)) {
-            for (const auto& entry : fs::directory_iterator(dir)) {
-              std::string filename = entry.path().filename().string();
-              // Verify the file begins with the prefix and is fully executable
-              if (filename.compare(0, len, prefix) == 0 && is_executable(entry.path())) {
-                path_matches.push_back(filename);
-              }
-            }
-          }
-        } catch (const std::exception&) {
-          // Gracefully ignore directory permission errors during path scanning
-        }
-      }
-      // Deduplicate commands found across different PATH folders
-      std::ranges::sort(path_matches);
-      auto [first, last] = std::ranges::unique(path_matches);
-      path_matches.erase(first, last);
-    }
-  }
-
-  // 1. Return matches from your custom shell built-ins
-  while (list_index < builtins.size()) {
-    const std::string& cmd = builtins[list_index++];
-    if (cmd.compare(0, len, prefix) == 0) {
-      return strdup(cmd.c_str());
-    }
-  }
-
-  // 2. Return deduplicated matches from the system PATH variables
-  if (path_match_index < path_matches.size()) {
-    return strdup(path_matches[path_match_index++].c_str());
-  }
-
-  return nullptr;
-}
-
-static char** shell_completion(const char* text, const int start, int end) {
-
-  if (start == 0) {
-    return rl_completion_matches(text, command_generator);
-  }
-  return rl_completion_matches(text, rl_filename_completion_function);
-}
-
-static void initialize_readline() {
-  rl_attempted_completion_function = shell_completion;
-  rl_bind_key('\t', rl_complete);
-}
 
 // Trim helpers
 static void trim_left(std::string &s) {
@@ -283,6 +216,135 @@ static std::vector<std::string> Tokenize_input(const std::string& input_line) {
     args.push_back(current_token);
   }
   return args;
+}
+
+static char* custom_path_generator(const char* text, const int state) {
+  static std::vector<std::string> script_matches;
+  static size_t match_index = 0;
+
+  if (!state) {
+    script_matches.clear();
+    match_index = 0;
+
+    // Get the full command line to find out what command we are running
+    // rl_line_buffer contains the raw characters currently typed in the shell
+    std::string line(rl_line_buffer);
+    std::vector<std::string> tokens = Tokenize_input(line);
+    if (tokens.empty()) return nullptr;
+
+    const std::string& cmd = tokens.front();
+
+    if (completion_paths.contains(cmd)) {
+      std::string raw_script_path = completion_paths[cmd];
+
+      // Strip out the wrapping single quotes we added before running via system shell
+      if (raw_script_path.front() == '\'' && raw_script_path.back() == '\'') {
+        raw_script_path = raw_script_path.substr(1, raw_script_path.length() - 2);
+      }
+
+      // Build the execution command passing the text prefix to complete as an argument
+      // Example: /path/to/script "typed_prefix"
+      std::string exec_cmd = raw_script_path + " " + wrap_string(text, '"');
+
+      // Open a pipe to read the script's stdout output line by line
+      if (FILE* fp = popen(exec_cmd.c_str(), "r")) {
+        char buffer[256];
+        while (fgets(buffer, sizeof(buffer), fp) != nullptr) {
+          std::string match(buffer);
+          // Trim out trailing newlines emitted by the script
+          trim_right(match);
+          if (!match.empty()) {
+            script_matches.push_back(match);
+          }
+        }
+        pclose(fp);
+      }
+    }
+  }
+
+  // Return the matches to Readline one by one
+  if (match_index < script_matches.size()) {
+    return strdup(script_matches[match_index++].c_str());
+  }
+
+  return nullptr;
+}
+
+
+static char* command_generator(const char* text, const int state) {
+  static size_t list_index, len;
+  static std::vector<std::string> path_matches;
+  static size_t path_match_index;
+  const std::string prefix(text);
+
+  if (!state) {
+    list_index = 0;
+    len = prefix.length();
+    path_matches.clear();
+    path_match_index = 0;
+
+    // Collect all matching commands from the system PATH once per completion request
+    if (const auto path_opt = get_env_var("PATH"); path_opt.has_value()) {
+      std::stringstream ss(*path_opt);
+      std::string dir;
+      while (std::getline(ss, dir, PATH_DELIM)) {
+        if (dir.empty()) continue;
+        try {
+          if (fs::exists(dir) && fs::is_directory(dir)) {
+            for (const auto& entry : fs::directory_iterator(dir)) {
+              std::string filename = entry.path().filename().string();
+              // Verify the file begins with the prefix and is fully executable
+              if (filename.compare(0, len, prefix) == 0 && is_executable(entry.path())) {
+                path_matches.push_back(filename);
+              }
+            }
+          }
+        } catch (const std::exception&) {
+          // Gracefully ignore directory permission errors during path scanning
+        }
+      }
+      // Deduplicate commands found across different PATH folders
+      std::ranges::sort(path_matches);
+      auto [first, last] = std::ranges::unique(path_matches);
+      path_matches.erase(first, last);
+    }
+  }
+
+  // 1. Return matches from your custom shell built-ins
+  while (list_index < builtins.size()) {
+    const std::string& cmd = builtins[list_index++];
+    if (cmd.compare(0, len, prefix) == 0) {
+      return strdup(cmd.c_str());
+    }
+  }
+
+  // 2. Return deduplicated matches from the system PATH variables
+  if (path_match_index < path_matches.size()) {
+    return strdup(path_matches[path_match_index++].c_str());
+  }
+
+  return nullptr;
+}
+
+static char** shell_completion(const char* text, const int start, int end) {
+
+  if (start == 0) {
+    return rl_completion_matches(text, command_generator);
+  }
+  const std::string line(rl_line_buffer);
+
+  if (const std::vector<std::string> tokens = Tokenize_input(line); !tokens.empty()) {
+    // Intercept: If this command has a registered autocompleter script, use it!
+    if (const std::string& cmd = tokens.front(); completion_paths.contains(cmd)) {
+      return rl_completion_matches(text, custom_path_generator);
+    }
+  }
+  return rl_completion_matches(text, rl_filename_completion_function);
+}
+
+static void initialize_readline() {
+  rl_attempted_completion_function = shell_completion;
+  rl_bind_key('\t', rl_complete);
 }
 
 static void execute_builtin(const std::string& command, const std::vector<std::string>& args) {
