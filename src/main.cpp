@@ -50,40 +50,45 @@ static char* command_generator(const char* text, const int state) {
   if (!state) {
     list_index = 0;
     len = prefix.length();
+    filename_state = 0;
   }
+
+  // Pass 1: Handle Builtin matches with safe iterative mapping increments
   while (list_index < builtins.size()) {
     const std::string& cmd = builtins[list_index];
-    list_index++;
+    list_index++; // Safely advance index to prep the next call state layer
+
     if (cmd.compare(0, len, prefix) == 0) {
       const auto match = static_cast<char *>(malloc(cmd.length() + 1));
       strcpy(match, cmd.c_str());
       return match;
     }
   }
+
+  // Pass 2: Handle fallback native disk directory listings
   char* file_match = rl_filename_completion_function(text, filename_state);
   if (file_match != nullptr) {
-    filename_state = 1; // Mark state as active so subsequent passes continue the file list
-    return file_match;  // Return the path string allocated by Readline
+    filename_state = 1;
+    return file_match;
   }
+
+  filename_state = 0;
   return nullptr;
 }
 
 static char** shell_completion(const char* text, const int start, int end) {
-  char** matches = nullptr;
+
   rl_attempted_completion_over = 1;
   if (start == 0) {
-    matches = rl_completion_matches(text, command_generator);
+    return rl_completion_matches(text, command_generator);
   }
-  else {
-    matches = rl_completion_matches(text, rl_filename_completion_function);
-  }
-  return matches;
+  return rl_completion_matches(text, rl_filename_completion_function);
 }
 
 static void initialize_readline() {
   rl_attempted_completion_function = shell_completion;
   rl_bind_key('\t', rl_complete);
-  rl_completion_append_character = ' ';
+  rl_completion_append_character = '\0';
 }
 
 // Reads from environment variables
