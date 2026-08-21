@@ -261,24 +261,29 @@ static std::vector<std::string> Tokenize_input(const std::string& input_line) {
 
 static void execute_builtin(const std::string& command, const std::vector<std::string>& args) {
 
-    if (command == "echo") {
-      for (size_t i{1}; i < args.size(); ++i) {
-        std::cout << args[i] << (i + 1 < args.size() ? " " : "");
-      }
-      std::cout << "\n";
+  if (command == "echo") {
+    for (size_t i{1}; i < args.size(); ++i) {
+      std::cout << args[i] << (i + 1 < args.size() ? " " : "");
     }
-    else if (command == "type") {
-      if (args.size() < 2) std::cout << "type: missing operand \n";
-      else {
-        const std::string& target = args[1];
-        if (const auto it = std::ranges::find(builtins, target); it != builtins.end()) std::cout << *it << " is a shell builtin\n";
-        else if (const std::string path = find_command_in_path(target); !path.empty()) std::cout << target << " is " << path << "\n";
-        else std::cout << target << ": not found\n";
-      }
+    std::cout << "\n";
+  }
+  else if (command == "type") {
+    if (args.size() < 2) std::cout << "type: missing operand \n";
+    else {
+      const std::string& target = args[1];
+      if (const auto it = std::ranges::find(builtins, target); it != builtins.end()) std::cout << *it << " is a shell builtin\n";
+      else if (const std::string path = find_command_in_path(target); !path.empty()) std::cout << target << " is " << path << "\n";
+      else std::cout << target << ": not found\n";
     }
-    else if (command == "pwd") {
-        std::cout << fs::current_path().string() << "\n";
+  }
+  else if (command == "pwd") {
+      std::cout << fs::current_path().string() << "\n";
+  }
+  else if (command == "complete") {
+    if (args[1] == "-p") {
+      std::cout << "complete: " << args[2] << ": no completion specification\n";
     }
+  }
 }
 
 static void execute_pipeline(const std::vector<CommandStage>& stages) {
