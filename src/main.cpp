@@ -236,7 +236,7 @@ static char* custom_path_generator(const char* text, const int state) {
       complete_line += token;
     }
     setenv("COMP_LINE", complete_line.c_str(), 1);
-    setenv("COMP_POINT", reinterpret_cast<const char *>(complete_line.length()), 1);
+    setenv("COMP_POINT", std::to_string(complete_line.length()).c_str(), 1);
     if (const std::string& cmd = tokens.front(); completion_paths.contains(cmd)) {
       std::string raw_script_path = completion_paths[cmd];
 
