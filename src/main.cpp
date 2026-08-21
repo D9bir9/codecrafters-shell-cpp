@@ -228,13 +228,11 @@ static char* custom_path_generator(const char* text, const int state) {
 
     // Get the full command line to find out what command we are running
     // rl_line_buffer contains the raw characters currently typed in the shell
-    std::string line(rl_line_buffer);
-    std::vector<std::string> tokens = Tokenize_input(line);
+    const std::string line(rl_line_buffer);
+    const std::vector<std::string> tokens = Tokenize_input(line);
     if (tokens.empty()) return nullptr;
 
-    const std::string& cmd = tokens.front();
-
-    if (completion_paths.contains(cmd)) {
+    if (const std::string& cmd = tokens.front(); completion_paths.contains(cmd)) {
       std::string raw_script_path = completion_paths[cmd];
 
       // Strip out the wrapping single quotes we added before running via system shell
@@ -244,7 +242,7 @@ static char* custom_path_generator(const char* text, const int state) {
 
       // Build the execution command passing the text prefix to complete as an argument
       // Example: /path/to/script "typed_prefix"
-      std::string exec_cmd = raw_script_path + " " + wrap_string(text, '"');
+      const std::string exec_cmd = raw_script_path + " " + wrap_string(text, '"');
 
       // Open a pipe to read the script's stdout output line by line
       if (FILE* fp = popen(exec_cmd.c_str(), "r")) {
