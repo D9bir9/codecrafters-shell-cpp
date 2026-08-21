@@ -53,7 +53,7 @@ static char* command_generator(const char* text, const int state) {
     filename_state = 0;
   }
 
-  // Pass 1: Handle Builtin matches with safe iterative mapping increments
+  // Pass 1: Scan custom shell built-in vector commands
   while (list_index < builtins.size()) {
     const std::string& cmd = builtins[list_index];
     list_index++; // Safely advance index to prep the next call state layer
@@ -65,7 +65,7 @@ static char* command_generator(const char* text, const int state) {
     }
   }
 
-  // Pass 2: Handle fallback native disk directory listings
+  // Pass 2: Fall back to native disk directory listings
   char* file_match = rl_filename_completion_function(text, filename_state);
   if (file_match != nullptr) {
     filename_state = 1;
@@ -80,9 +80,11 @@ static char** shell_completion(const char* text, const int start, int end) {
 
   rl_attempted_completion_over = 1;
   if (start == 0) {
+    rl_filename_completion_desired = 1;
     return rl_completion_matches(text, command_generator);
   }
   return rl_completion_matches(text, rl_filename_completion_function);
+
 }
 
 static void initialize_readline() {
