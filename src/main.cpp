@@ -592,6 +592,14 @@ int main() {
           completion_paths.insert_or_assign(args[3], args[2]);
         }
       }
+      else if (args[1] == "-r") {
+        if (args.size() < 3) std::cout << "complete: missing operand \n";
+        else {
+          if (completion_paths.contains(args[2])) {
+            completion_paths.erase(args[2]);
+          }
+        }
+      }
     }
     else {
       execute_pipeline(pipeline_stages);
