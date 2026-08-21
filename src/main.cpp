@@ -52,7 +52,7 @@ static std::optional<std::string> get_env_var(const std::string& key) {
   else return std::string(var);
 }
 
-char* executable_generator(const char* text, int state) {
+static char* executable_generator(const char* text, int state) {
   static DIR* dir = nullptr;
   static std::string path;
   struct dirent* entry;
@@ -85,7 +85,7 @@ char* executable_generator(const char* text, int state) {
       std::string full_path = path + name;
 
       // Check if the file is a regular file and executable
-      struct stat statbuf{};
+      struct stat statbuf;
       if (stat(full_path.c_str(), &statbuf) == 0 && S_ISREG(statbuf.st_mode)) {
         if (access(full_path.c_str(), X_OK) == 0) {
           // Readline expects a dynamically allocated C-string
