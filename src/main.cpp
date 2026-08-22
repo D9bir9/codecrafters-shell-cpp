@@ -444,8 +444,9 @@ static void execute_builtin(const std::string& command, const std::vector<std::s
     if (active_jobs.empty()) {
       return;
     }
-    for (const auto&[job_id, pid, j_command] : active_jobs) {
-      std::cout << "[" << job_id << "] " << pid << " Running " << j_command << " &\n";
+    for (size_t i{}; i < active_jobs.size(); ++i) {
+      const auto&[job_id, pid, j_command] = active_jobs[i];
+      std::cout << "[" << job_id << "]" << (i == active_jobs.size() -1 ? "+  " : "  ") << pid << "  Running" << std::string(17, ' ') << j_command << " &\n";
     }
   }
 }
