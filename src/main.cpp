@@ -19,7 +19,7 @@
 
 namespace fs = std::filesystem;
 
-const std::vector<std::string> builtins = {"echo", "exit", "type", "pwd", "cd", "complete"};
+const std::vector<std::string> builtins = {"echo", "exit", "type", "pwd", "cd", "complete", "jobs"};
 static std::unordered_map<std::string, std::string> completion_paths;
 
 #ifdef _WIN32
@@ -391,6 +391,9 @@ static void execute_builtin(const std::string& command, const std::vector<std::s
   }
   else if (command == "pwd") {
       std::cout << fs::current_path().string() << "\n";
+  }
+  else if (command == "jobs") {
+
   }
 }
 
