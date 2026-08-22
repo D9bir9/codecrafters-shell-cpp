@@ -16,11 +16,9 @@
 #include <unistd.h>
 #include <sys/wait.h>
 #include <unordered_map>
+#include <csignal>
 
 namespace fs = std::filesystem;
-
-const std::vector<std::string> builtins = {"echo", "exit", "type", "pwd", "cd", "complete", "jobs"};
-static std::unordered_map<std::string, std::string> completion_paths;
 
 #ifdef _WIN32
   constexpr char PATH_DELIM = ';';
@@ -44,6 +42,55 @@ namespace {
   };
 }
 
+const std::vector<std::string> builtins = {"echo", "exit", "type", "pwd", "cd", "complete", "jobs"};
+static std::unordered_map<std::string, std::string> completion_paths;
+namespace {
+  struct BackgroundJob{
+    int job_id;
+    pid_t pid;
+    std::string command;
+  };
+}
+static bool is_job = false;
+
+static std::vector<BackgroundJob> active_jobs;
+static int next_job_id = 1;
+
+// Cleans up background processes that have naturally terminated
+static void update_background_jobs() {
+  auto it = active_jobs.begin();
+  while (it != active_jobs.end()) {
+    int status;
+    // WNOHANG checks process state without pausing/blocking execution
+
+    if (const pid_t result = waitpid(it->pid, &status, WNOHANG); result > 0) {
+      // Determine how the process finished
+      std::string status_str = "Done";
+      if (WIFSIGNALED(status)) {
+        status_str = "Terminated";
+      }
+
+      // Print completion notice matching standard shell patterns
+      std::cout << "[" << it->job_id << "]+  " << status_str
+                << "       " << it->command << "\n";
+
+      // Erase from active tracker
+      it = active_jobs.erase(it);
+    } else {
+      ++it;
+    }
+  }
+}
+
+static void setup_shell_signals() {
+  // 1. Ignore SIGINT (Ctrl+C) in the parent shell process
+  // This stops the shell itself from dying when you hit Ctrl+C
+  std::signal(SIGINT, SIG_IGN);
+
+  // 2. Ignore SIGTSTP (Ctrl+Z) in the parent shell process
+  // This stops the shell from freezing/suspending in the background
+  std::signal(SIGTSTP, SIG_IGN);
+}
 
 // Reads from environment variables
 static std::optional<std::string> get_env_var(const std::string& key) {
@@ -393,7 +440,13 @@ static void execute_builtin(const std::string& command, const std::vector<std::s
       std::cout << fs::current_path().string() << "\n";
   }
   else if (command == "jobs") {
-
+    update_background_jobs(); // Refresh list immediately before reading
+    if (active_jobs.empty()) {
+      return;
+    }
+    for (const auto&[job_id, pid, j_command] : active_jobs) {
+      std::cout << "[" << job_id << "] " << pid << " Running " << j_command << " &\n";
+    }
   }
 }
 
@@ -412,10 +465,17 @@ static void execute_pipeline(const std::vector<CommandStage>& stages) {
     }
 
     if (const pid_t pid = fork(); pid == 0) {
-        if (in_fd != 0) {
-          dup2(in_fd, STDIN_FILENO);
-          close(in_fd);
-        }
+
+      std::signal(SIGINT, SIG_DFL);
+      std::signal(SIGTSTP, SIG_DFL);
+
+      // Put the child in its own process group to isolate signals
+      setpgid(0, 0);
+
+      if (in_fd != 0) {
+        dup2(in_fd, STDIN_FILENO);
+        close(in_fd);
+      }
 
       if (i < num_commands - 1) {
         close(pipe_fds[0]);
@@ -455,7 +515,25 @@ static void execute_pipeline(const std::vector<CommandStage>& stages) {
   }
   // Master shell sync lock: Wait for ALL spawned processes to finish
   for (const pid_t pid : child_pids) {
-    waitpid(pid, nullptr, 0);
+    if (is_job) {
+      // Re-assemble command name for readable tracking output
+      std::string full_cmd ;
+      auto args = stages.front().args;
+      for (size_t i{}; i < args.size(); ++i) {
+        full_cmd += args[i] + (i + 1 < args.size() ? " " : "");
+      }
+
+      active_jobs.push_back({.job_id = next_job_id, .pid = pid, .command = full_cmd});
+      std::cout << "[" << next_job_id << "] " << pid << "\n";
+
+      next_job_id++;
+      is_job = false; // Reset background state trigger
+
+      usleep(1000);
+    }
+    else {
+      waitpid(pid, nullptr, 0);
+    }
   }
 }
 
@@ -467,12 +545,15 @@ int main() {
 
   initialize_readline();
 
+  setup_shell_signals();
+
   using_history();
 
   // TODO: Uncomment the code below to pass the first stage
   //REPL Read-Eval-Print-Loop
   while (true) {
     char* raw_input = readline("$ ");
+    update_background_jobs();
     if (raw_input == nullptr) break;
 
     std::string line(raw_input);
@@ -483,6 +564,11 @@ int main() {
 
     std::vector<std::string> args = Tokenize_input(line);
     if (args.empty()) continue;
+
+    if (args.back() == "&") {
+      is_job = true;
+      args.pop_back();
+    }
 
     std::vector<CommandStage> pipeline_stages;
     CommandStage current_stage;
@@ -519,6 +605,11 @@ int main() {
         stage.err_app = (*err_it == "2>>");
         stage.err_redir = true;
         if (std::distance(stage.args.begin(), err_it) + 1 < stage.args.size()) {
+          if (std::string filename = *(err_it + 1); filename == ">" || filename == ">>" || filename == "1>" || filename == "1>>" || filename == "2>" || filename == "2>>" || filename == "|") {
+            std::cout << "Shell: syntax error near unexpected token '" << filename << "'\n";
+            syntax_error = true;
+            break;
+          }
           stage.err_file = *(err_it + 1);
           stage.args.erase(err_it, err_it + 2);
         } else {
@@ -531,6 +622,11 @@ int main() {
         stage.out_app = (*out_it == ">>" || *out_it == "1>>");
         stage.out_redir = true;
         if (std::distance(stage.args.begin(), out_it) + 1 < stage.args.size()) {
+          if (std::string filename = *(out_it + 1); filename == ">" || filename == ">>" || filename == "1>" || filename == "1>>" || filename == "2>" || filename == "2>>" || filename == "|") {
+            std::cout << "Shell: syntax error near unexpected token '" << filename << "'\n";
+            syntax_error = true;
+            break;
+          }
           stage.out_file = *(out_it + 1);
           stage.args.erase(out_it, out_it + 2);
         } else {
