@@ -563,7 +563,7 @@ int main() {
   //REPL Read-Eval-Print-Loop
   while (true) {
     char* raw_input = readline("$ ");
-    update_background_jobs();
+    //update_background_jobs();
     if (raw_input == nullptr) break;
 
     std::string line(raw_input);
