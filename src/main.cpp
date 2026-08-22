@@ -71,8 +71,8 @@ static void update_background_jobs() {
       }
 
       // Print completion notice matching standard shell patterns
-      std::cout << "[" << it->job_id << "]+  " << status_str
-                << "       " << it->command << "\n";
+      std::cout << "[" << it->job_id << "]" << (it->job_id == active_jobs.size() -1 ? "+" : "") << (it->job_id == active_jobs
+        .size() -2 ? "-" : "") << ((it->job_id == active_jobs.size() - 2 || it->job_id == active_jobs.size() - 1) ? "" : " ") << " " << status_str << std::string(17, ' ') << it->command << "\n";
 
       // Erase from active tracker
       it = active_jobs.erase(it);
@@ -446,8 +446,9 @@ static void execute_builtin(const std::string& command, const std::vector<std::s
     }
     for (size_t i{}; i < active_jobs.size(); ++i) {
       const auto&[job_id, pid, j_command] = active_jobs[i];
+      const bool is_done = waitpid(pid, nullptr, WNOHANG) > 0;
       std::cout << "[" << job_id << "]" << (i == active_jobs.size() -1 ? "+" : "") << (i == active_jobs
-        .size() -2 ? "-" : "") << ((i == active_jobs.size() - 2 || i == active_jobs.size() - 1) ? "" : " ") << " " << "Running" << std::string(17, ' ') << j_command << " &\n";
+        .size() -2 ? "-" : "") << ((i == active_jobs.size() - 2 || i == active_jobs.size() - 1) ? "" : " ") << " " << (is_done ? "done" : "Running") << (is_done ? std::string(20, ' ') : std::string(17, ' ')) << j_command << " &\n";
     }
   }
 }
