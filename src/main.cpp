@@ -75,7 +75,7 @@ static void update_background_jobs() {
         .size() -2 ? "-" : "") << ((it->job_id == active_jobs.size() - 2 || it->job_id == active_jobs.size() - 1) ? "" : " ") << " " << status_str << std::string(17, ' ') << it->command << "\n";
 
       // Erase from active tracker
-      //it = active_jobs.erase(it);
+      it = active_jobs.erase(it);
     } else {
       ++it;
     }
@@ -444,13 +444,17 @@ static void execute_builtin(const std::string& command, const std::vector<std::s
     if (active_jobs.empty()) {
       return;
     }
-    for (int i{}; i < active_jobs.size(); ++i) {
+    int i = 0;
+    while (i < active_jobs.size()) {
       const auto&[job_id, pid, j_command] = active_jobs[i];
       const bool is_done = waitpid(pid, nullptr, WNOHANG) > 0;
       std::cout << "[" << job_id << "]" << (i == active_jobs.size() -1 ? "+" : "") << (i == active_jobs
         .size() -2 ? "-" : "") << ((i == active_jobs.size() - 2 || i == active_jobs.size() - 1) ? "" : " ") << " " << (is_done ? "done" : "Running") << (is_done ? std::string(20, ' ') : std::string(17, ' ')) << j_command << " &\n";
       if (is_done) {
         active_jobs.erase(active_jobs.begin() + i);
+      }
+      else {
+        i++;
       }
     }
   }
