@@ -465,7 +465,7 @@ static void execute_builtin(const std::string& command, const std::vector<std::s
                 <<end_marker <<"\n";
     }
       std::erase_if(active_jobs, [](const auto& job) {
-      return job.status == "Done";
+      return job.status == "Done" || job.status == "done";
     });
   }
 }
