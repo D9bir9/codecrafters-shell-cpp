@@ -850,7 +850,11 @@ int main() {
 
       std::string command = pipeline_stages.front().args.front();
 
-      if (command == "exit") { should_exit_shell = true; break; }
+      if (command == "exit") {
+        write_history(hist_filename.c_str());
+        should_exit_shell = true;
+        break;
+      }
       if (command == "jobs" && pipeline_stages.size() == 1 &&
           !pipeline_stages.front().out_redir && !pipeline_stages.front().err_redir) {
         execute_builtin(command, pipeline_stages.front().args);
