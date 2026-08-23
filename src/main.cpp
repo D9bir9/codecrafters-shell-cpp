@@ -792,7 +792,7 @@ int main() {
         auto h_list = history_list();
         size_t line_number{1};
 
-        while (*(h_list + 1) != nullptr) {
+        while (*(h_list) != nullptr) {
           std::cout << line_number << " " << (*h_list)->line << "\n";
           h_list = h_list + 1;
           line_number++;
