@@ -42,7 +42,7 @@ namespace {
   };
 }
 
-const std::vector<std::string> builtins = {"echo", "exit", "type", "pwd", "cd", "complete", "jobs", "history"};
+const std::vector<std::string> builtins = {"echo", "exit", "type", "pwd", "cd", "complete", "jobs", "history", "declare"};
 static std::unordered_map<std::string, std::string> completion_paths;
 static std::vector<std::string> complete_args;
 namespace {
