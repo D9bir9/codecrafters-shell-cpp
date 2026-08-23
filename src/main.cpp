@@ -50,6 +50,7 @@ namespace {
     pid_t pid;
     std::string command;
     std::string status = "Running";
+    bool reported_done = false;
   };
 }
 static bool is_job = false;
@@ -62,26 +63,18 @@ static void update_background_jobs() {
   auto it = active_jobs.begin();
   while (it != active_jobs.end()) {
     int status;
-    // WNOHANG checks process state without pausing/blocking execution
 
-    if (const pid_t result = waitpid(it->pid, &status, WNOHANG); result > 0) {
-      // Determine how the process finished
-      std::string status_str = "Done";
-      if (WIFSIGNALED(status)) {
-        status_str = "Terminated";
+    // Only check background processes that are still actively running in our tracker
+    if (it->status == "Running") {
+      if (const pid_t result = waitpid(it->pid, &status, WNOHANG); result > 0) {
+        std::string status_str = "Done";
+        if (WIFSIGNALED(status)) {
+          status_str = "Terminated";
+        }
+        it->status = status_str;
       }
-      it->status = status_str;
-
-      // Print completion notice matching standard shell patterns
-      /*
-      std::cout << "[" << it->job_id << "]" << (it->job_id == active_jobs.size() -1 ? "+" : "") << (it->job_id == active_jobs
-        .size() -2 ? "-" : "") << ((it->job_id == active_jobs.size() - 2 || it->job_id == active_jobs.size() - 1) ? "" : " ") << " " << status_str << std::string(17, ' ') << it->command << "\n";
-*/
-      // Erase from active tracker
-      //it = active_jobs.erase(it);
-    } else {
-      ++it;
     }
+    ++it;
   }
 }
 
@@ -446,33 +439,38 @@ static void execute_builtin(const std::string& command, const std::vector<std::s
     if (active_jobs.empty()) {
       return;
     }
-
-    // Explicitly scan and list only the background tasks currently tracked as alive
+    // PHASE 1: Stable printing layout matching POSIX rules
     for (size_t i = 0; i < active_jobs.size(); ++i) {
-      // Safely apply the standard spacing prefix padding
       std::string current_marker = " ";
       std::string end_marker = " &";
-      if (i == active_jobs.size() - 1) current_marker = "+ ";
-      else if (i == active_jobs.size() - 2) current_marker = "- ";
 
-      if (active_jobs[i].status == "Done") end_marker = "";
+      if (i == active_jobs.size() - 1) {
+        current_marker = "+ ";
+      } else if (i == active_jobs.size() - 2) {
+        current_marker = "- ";
+      }
 
-      // Match exact posix tester alignments: "[id]marker  Running                 command &"
+      if (active_jobs[i].status == "Done") {
+        end_marker = "";
+      }
+
       std::cout << "[" << active_jobs[i].job_id << "]"
                 << current_marker << " "
-                << active_jobs[i].status << std::string(17, ' ') // Stable, uniform whitespace columns
+                << active_jobs[i].status << std::string(17, ' ')
                 << active_jobs[i].command
-                <<end_marker <<"\n";
-    }
-    auto it = active_jobs.begin();
-    while (it != active_jobs.end()) {
-      if (it->status == "Done") {
-        active_jobs.erase(it);
-      }
-      else {
-        ++it;
+                << end_marker << "\n";
+
+      // Flag that this specific finished job has now been printed to stdout
+      if (active_jobs[i].status == "Done") {
+        active_jobs[i].reported_done = true;
+        std::cout << "yes\n";
       }
     }
+
+    // PHASE 2: Erase elements ONLY if they were processed and printed as Done
+    std::erase_if(active_jobs, [](const BackgroundJob& job) {
+      return job.reported_done;
+    });
   }
 }
 
