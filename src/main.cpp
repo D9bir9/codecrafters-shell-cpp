@@ -580,9 +580,6 @@ static void execute_pipeline(const std::vector<CommandStage>& stages) {
     }
   }
   if (is_job) {
-    // Backgrounded: don't block on ANY stage, not even earlier pipeline
-    // stages. Track every pid in the pipeline so update_background_jobs()
-    // can tell when the whole job (not just its last stage) has finished.
     std::string full_cmd;
     for (size_t i{}; i < complete_args.size(); ++i) {
       full_cmd += complete_args[i] + (i + 1 < complete_args.size() ? " " : "");
@@ -643,152 +640,220 @@ int main() {
       continue;
     }
 
-    if (complete_args.back() == "&") {
-      is_job = true;
-      complete_args.pop_back();
+    // Bash treats '&' as a command SEPARATOR/TERMINATOR, not something
+    // that only matters when it's the very last token on the line. Split
+    // the line into segments at every top-level '&': each segment before
+    // an '&' backgrounds independently, and a trailing segment with no
+    // '&' after it runs in the foreground as usual.
+    struct LineSegment {
+      std::vector<std::string> tokens;
+      bool is_in_background;
+    };
+    std::vector<LineSegment> segments;
+    {
+      std::vector<std::string> current_segment;
+      for (const auto& token : complete_args) {
+        if (token == "&") {
+          segments.push_back({.tokens = current_segment, .is_in_background = true});
+          current_segment.clear();
+        } else {
+          current_segment.push_back(token);
+        }
+      }
+      // Anything left after the last '&' (or the whole line, if there was
+      // no '&' at all) runs in the foreground.
+      if (!current_segment.empty() || segments.empty()) {
+        segments.push_back({current_segment, false});
+      }
     }
 
-    std::vector<CommandStage> pipeline_stages;
-    CommandStage current_stage;
+    bool should_exit_shell = false;
 
-    for (size_t i{}; i < complete_args.size(); ++i) {
-      if (complete_args[i] == "|") {
-        if (current_stage.args.empty()) {
-          std::cout << "Shell: syntax error near unexpected token '|'\n";
-          pipeline_stages.clear();
-          break;
+    // PASS 1: validate every segment (pipe structure, redirection syntax)
+    // before executing ANY of them. Real bash parses the whole line first;
+    // a syntax error anywhere means nothing on the line runs at all -- so
+    // "echo hi & &" must not background "echo hi" just because the error
+    // is in the second segment.
+    struct ValidatedSegment {
+      std::vector<std::string> raw_tokens;
+      std::vector<CommandStage> pipeline_stages;
+      bool is_in_background;
+    };
+    std::vector<ValidatedSegment> validated;
+    bool line_has_error = false;
+
+    for (auto& segment : segments) {
+      if (segment.tokens.empty()) {
+        // e.g. "cmd &  & cmd2" or a bare leading "&" -- nothing to background.
+        std::cout << "Shell: syntax error near unexpected token '&'\n";
+        line_has_error = true;
+        break;
+      }
+
+      std::vector<CommandStage> pipeline_stages;
+      CommandStage current_stage;
+      bool abort = false;
+
+      for (size_t i{}; i < segment.tokens.size(); ++i) {
+        if (segment.tokens[i] == "|") {
+          if (current_stage.args.empty()) {
+            std::cout << "Shell: syntax error near unexpected token '|'\n";
+            abort = true;
+            break;
+          }
+          pipeline_stages.push_back(current_stage);
+          current_stage = CommandStage();
         }
+        else {
+          current_stage.args.push_back(segment.tokens[i]);
+        }
+      }
+
+      if (abort) { line_has_error = true; break; }
+
+      if (!current_stage.args.empty()) {
         pipeline_stages.push_back(current_stage);
-        current_stage = CommandStage();
       }
-      else {
-        current_stage.args.push_back(complete_args[i]);
+
+      if (pipeline_stages.empty()) { line_has_error = true; break; }
+
+      if (segment.tokens.back() == "|") {
+        std::cout << "Shell: syntax error near unexpected token '|'\n";
+        line_has_error = true;
+        break;
       }
-    }
 
-    if (!current_stage.args.empty()) {
-      pipeline_stages.push_back(current_stage);
-    }
-
-    if (pipeline_stages.empty()) continue;
-
-    if (complete_args.back() == "|") {
-      std::cout << "Shell: syntax error near unexpected token '|'\n";
-      continue;
-    }
-
-    bool syntax_error = false;
-    for (auto& stage : pipeline_stages) {
-      if (auto err_it = std::ranges::find_if(stage.args.begin(), stage.args.end(), [](auto& a){ return a == "2>" || a == "2>>"; }); err_it != stage.args.end()) {
-        stage.err_app = (*err_it == "2>>");
-        stage.err_redir = true;
-        if (std::distance(stage.args.begin(), err_it) + 1 < stage.args.size()) {
-          if (std::string filename = *(err_it + 1); filename == ">" || filename == ">>" || filename == "1>" || filename == "1>>" || filename == "2>" || filename == "2>>" || filename == "|") {
-            std::cout << "Shell: syntax error near unexpected token '" << filename << "'\n";
+      bool syntax_error = false;
+      for (auto& stage : pipeline_stages) {
+        if (auto err_it = std::ranges::find_if(stage.args.begin(), stage.args.end(), [](auto& a){ return a == "2>" || a == "2>>"; }); err_it != stage.args.end()) {
+          stage.err_app = (*err_it == "2>>");
+          stage.err_redir = true;
+          if (std::distance(stage.args.begin(), err_it) + 1 < stage.args.size()) {
+            if (std::string filename = *(err_it + 1); filename == ">" || filename == ">>" || filename == "1>" || filename == "1>>" || filename == "2>" || filename == "2>>" || filename == "|") {
+              std::cout << "Shell: syntax error near unexpected token '" << filename << "'\n";
+              syntax_error = true;
+              break;
+            }
+            stage.err_file = *(err_it + 1);
+            stage.args.erase(err_it, err_it + 2);
+          } else {
+            std::cout << "Shell: syntax error near unexpected token 'newline'\n";
             syntax_error = true;
             break;
           }
-          stage.err_file = *(err_it + 1);
-          stage.args.erase(err_it, err_it + 2);
-        } else {
-          std::cout << "Shell: syntax error near unexpected token 'newline'\n";
-          syntax_error = true;
-          break;
         }
-      }
-      if (auto out_it = std::ranges::find_if(stage.args.begin(), stage.args.end(), [](auto& a){ return a == ">" || a == "1>" || a == ">>" || a == "1>>"; }); out_it != stage.args.end()) {
-        stage.out_app = (*out_it == ">>" || *out_it == "1>>");
-        stage.out_redir = true;
-        if (std::distance(stage.args.begin(), out_it) + 1 < stage.args.size()) {
-          if (std::string filename = *(out_it + 1); filename == ">" || filename == ">>" || filename == "1>" || filename == "1>>" || filename == "2>" || filename == "2>>" || filename == "|") {
-            std::cout << "Shell: syntax error near unexpected token '" << filename << "'\n";
+        if (auto out_it = std::ranges::find_if(stage.args.begin(), stage.args.end(), [](auto& a){ return a == ">" || a == "1>" || a == ">>" || a == "1>>"; }); out_it != stage.args.end()) {
+          stage.out_app = (*out_it == ">>" || *out_it == "1>>");
+          stage.out_redir = true;
+          if (std::distance(stage.args.begin(), out_it) + 1 < stage.args.size()) {
+            if (std::string filename = *(out_it + 1); filename == ">" || filename == ">>" || filename == "1>" || filename == "1>>" || filename == "2>" || filename == "2>>" || filename == "|") {
+              std::cout << "Shell: syntax error near unexpected token '" << filename << "'\n";
+              syntax_error = true;
+              break;
+            }
+            stage.out_file = *(out_it + 1);
+            stage.args.erase(out_it, out_it + 2);
+          } else {
+            std::cout << "Shell: syntax error near unexpected token 'newline'\n";
             syntax_error = true;
             break;
           }
-          stage.out_file = *(out_it + 1);
-          stage.args.erase(out_it, out_it + 2);
-        } else {
-          std::cout << "Shell: syntax error near unexpected token 'newline'\n";
-          syntax_error = true;
-          break;
+        }
+        if (!stage.args.empty()) {
+          for (size_t k{1}; k < stage.args.size(); ++k) {
+            trim(stage.args[k]);
+          }
         }
       }
-      if (!stage.args.empty()) {
-        for (size_t k{1}; k < stage.args.size(); ++k) {
-          trim(stage.args[k]);
-        }
-      }
+
+      if (syntax_error) { line_has_error = true; break; }
+
+      validated.push_back({segment.tokens, std::move(pipeline_stages), segment.is_in_background});
     }
 
-    if (syntax_error) continue;
+    if (line_has_error) continue; // whole line rejected -- nothing executes, matching bash
 
-    std::string command = pipeline_stages.front().args.front();
+    // PASS 2: the line parsed cleanly end to end, so now actually run
+    // each segment in order.
+    for (auto& validated_segment : validated) {
+      complete_args = validated_segment.raw_tokens;
+      is_job = validated_segment.is_in_background;
+      std::vector<CommandStage>& pipeline_stages = validated_segment.pipeline_stages;
 
+      std::string command = pipeline_stages.front().args.front();
 
+      if (command == "exit") { should_exit_shell = true; break; }
+      if (command == "jobs" && pipeline_stages.size() == 1 &&
+          !pipeline_stages.front().out_redir && !pipeline_stages.front().err_redir) {
+        execute_builtin(command, pipeline_stages.front().args);
+        continue;
+      }
+      if (command == "history") {
+        auto h_list = history_list();
+        size_t line_number{1};
 
-    if (command == "exit") break;
-    if (command == "jobs" && pipeline_stages.size() == 1 &&
-        !pipeline_stages.front().out_redir && !pipeline_stages.front().err_redir) {
-      // Run directly in the shell process (not forked) so std::erase_if
-      // actually mutates the real active_jobs vector. Only safe to take
-      // this shortcut when jobs isn't piped or redirected -- those cases
-      // fall through to execute_pipeline below, same as any other builtin.
-      execute_builtin(command, pipeline_stages.front().args);
-      continue;
-    }
-    if (command == "cd") {
-      auto cd_arg = pipeline_stages.front().args;
-      std::string target_path = (cd_arg.size() > 1) ? cd_arg[1] : "";
-      bool home_error = false;
-      if (target_path.empty() || target_path.starts_with('~')) {
-        if (auto home = get_env_var("HOME"); home.has_value()) {
-          if (target_path.empty() || target_path == "~") target_path = *home;
-          else if (target_path.starts_with("~/")) target_path.replace(0, 1, *home);
-        }
-        else {
-          std::cout << "HOME not set\n";
-          home_error = true;
+        while (*(h_list + 1) != nullptr) {
+          std::cout << line_number << " " << (*h_list)->line << "\n";
+          h_list = h_list + 1;
+          line_number++;
         }
       }
-
-      if (!home_error) {
-        try {
-          fs::current_path(fs::path(target_path));
-        }
-        catch (const fs::filesystem_error&) {
-          std::cout << "cd: " << (cd_arg.size() > 1? cd_arg[1] : "") << ": No such file or directory" << "\n";
-        }
-      }
-    }
-    else if (command == "complete") {
-      if (complete_args[1] == "-p") {
-        if (complete_args.size() < 3) std::cout << "complete: missing operand \n";
-        else {
-          if (completion_paths.contains(complete_args[2])) {
-            std::cout << "complete -C '" << completion_paths[complete_args[2]] << "' " << complete_args[2] << "\n";
+      if (command == "cd") {
+        auto cd_arg = pipeline_stages.front().args;
+        std::string target_path = (cd_arg.size() > 1) ? cd_arg[1] : "";
+        bool home_error = false;
+        if (target_path.empty() || target_path.starts_with('~')) {
+          if (auto home = get_env_var("HOME"); home.has_value()) {
+            if (target_path.empty() || target_path == "~") target_path = *home;
+            else if (target_path.starts_with("~/")) target_path.replace(0, 1, *home);
           }
           else {
-            std::cout << "complete: " << complete_args[2] << ": no completion specification\n";
+            std::cout << "HOME not set\n";
+            home_error = true;
+          }
+        }
+
+        if (!home_error) {
+          try {
+            fs::current_path(fs::path(target_path));
+          }
+          catch (const fs::filesystem_error&) {
+            std::cout << "cd: " << (cd_arg.size() > 1? cd_arg[1] : "") << ": No such file or directory" << "\n";
           }
         }
       }
-      else if (complete_args[1] == "-C") {
-        if (complete_args.size() < 4) std::cout << "complete: missing operand \n";
-        else {
-          completion_paths.insert_or_assign(complete_args[3], complete_args[2]);
+      else if (command == "complete") {
+        if (complete_args[1] == "-p") {
+          if (complete_args.size() < 3) std::cout << "complete: missing operand \n";
+          else {
+            if (completion_paths.contains(complete_args[2])) {
+              std::cout << "complete -C '" << completion_paths[complete_args[2]] << "' " << complete_args[2] << "\n";
+            }
+            else {
+              std::cout << "complete: " << complete_args[2] << ": no completion specification\n";
+            }
+          }
         }
-      }
-      else if (complete_args[1] == "-r") {
-        if (complete_args.size() < 3) std::cout << "complete: missing operand \n";
-        else {
-          if (completion_paths.contains(complete_args[2])) {
-            completion_paths.erase(complete_args[2]);
+        else if (complete_args[1] == "-C") {
+          if (complete_args.size() < 4) std::cout << "complete: missing operand \n";
+          else {
+            completion_paths.insert_or_assign(complete_args[3], complete_args[2]);
+          }
+        }
+        else if (complete_args[1] == "-r") {
+          if (complete_args.size() < 3) std::cout << "complete: missing operand \n";
+          else {
+            if (completion_paths.contains(complete_args[2])) {
+              completion_paths.erase(complete_args[2]);
+            }
           }
         }
       }
+      else {
+        execute_pipeline(pipeline_stages);
+      }
     }
-    else {
-      execute_pipeline(pipeline_stages);
-    }
+
+    if (should_exit_shell) break;
   }
 }
