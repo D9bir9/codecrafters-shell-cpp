@@ -515,7 +515,7 @@ static void execute_builtin(const std::string& command, const std::vector<std::s
           return;
         }
         const char* filename = args_[2].c_str();
-        read_history(filename);
+        std::cout << read_history(filename) << std::endl;
       }
       else {
         std::cout << "Shell: " << args_[1] << ": numeric argument required\n";
