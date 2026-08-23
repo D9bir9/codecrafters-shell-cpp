@@ -577,6 +577,9 @@ static void execute_pipeline(const std::vector<CommandStage>& stages) {
       // Re-assemble command name for readable tracking output
       std::string full_cmd ;
       auto args = stages.front().args;
+      if (active_jobs.empty()) {
+        next_job_id = 1;
+      }
       for (size_t i{}; i < args.size(); ++i) {
         full_cmd += args[i] + (i + 1 < args.size() ? " " : "");
       }
