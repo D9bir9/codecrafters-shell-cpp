@@ -49,7 +49,7 @@ namespace {
     int job_id;
     pid_t pid;
     std::string command;
-    std::string status = "running";
+    std::string status = "Running";
   };
 }
 static bool is_job = false;
