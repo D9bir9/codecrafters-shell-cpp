@@ -49,6 +49,7 @@ namespace {
     int job_id;
     pid_t pid;
     std::string command;
+    std::string status = "running";
   };
 }
 static bool is_job = false;
@@ -69,13 +70,14 @@ static void update_background_jobs() {
       if (WIFSIGNALED(status)) {
         status_str = "Terminated";
       }
+      it->status = status_str;
 
       // Print completion notice matching standard shell patterns
       std::cout << "[" << it->job_id << "]" << (it->job_id == active_jobs.size() -1 ? "+" : "") << (it->job_id == active_jobs
         .size() -2 ? "-" : "") << ((it->job_id == active_jobs.size() - 2 || it->job_id == active_jobs.size() - 1) ? "" : " ") << " " << status_str << std::string(17, ' ') << it->command << "\n";
 
       // Erase from active tracker
-      it = active_jobs.erase(it);
+      //it = active_jobs.erase(it);
     } else {
       ++it;
     }
@@ -454,7 +456,7 @@ static void execute_builtin(const std::string& command, const std::vector<std::s
       // Match exact posix tester alignments: "[id]marker  Running                 command &"
       std::cout << "[" << active_jobs[i].job_id << "]"
                 << current_marker
-                << "  Running                 " // Stable, uniform whitespace columns
+                << active_jobs[i].status << std::string(17, ' ') // Stable, uniform whitespace columns
                 << active_jobs[i].command
                 << " &\n";
     }
