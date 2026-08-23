@@ -78,6 +78,40 @@ static void update_background_jobs() {
   }
 }
 
+static void reap_jobs() {
+  if (active_jobs.empty()) {
+    return;
+  }
+  update_background_jobs();
+  // PHASE 1: Stable printing layout matching POSIX rules
+  for (size_t i = 0; i < active_jobs.size(); ++i) {
+    std::string current_marker = " ";
+
+    if (i == active_jobs.size() - 1) {
+      current_marker = "+ ";
+    } else if (i == active_jobs.size() - 2) {
+      current_marker = "- ";
+    }
+
+    if (active_jobs[i].status == "Done") {
+      std::cout << "[" << active_jobs[i].job_id << "]"
+              << current_marker << " "
+              << "Done" << std::string(17, ' ')
+              << active_jobs[i].command
+              <<"\n";
+
+      // Flag that this specific finished job has now been printed to stdout
+      if (active_jobs[i].status == "Done") {
+        active_jobs[i].reported_done = true;
+      }
+    }
+  }
+  // PHASE 2: Erase elements ONLY if they were processed and printed as Done
+  std::erase_if(active_jobs, [](const BackgroundJob& job) {
+    return job.reported_done;
+  });
+}
+
 static void setup_shell_signals() {
   // 1. Ignore SIGINT (Ctrl+C) in the parent shell process
   // This stops the shell itself from dying when you hit Ctrl+C
@@ -439,6 +473,7 @@ static void execute_builtin(const std::string& command, const std::vector<std::s
     if (active_jobs.empty()) {
       return;
     }
+    update_background_jobs();
     // PHASE 1: Stable printing layout matching POSIX rules
     for (size_t i = 0; i < active_jobs.size(); ++i) {
       std::string current_marker = " ";
@@ -574,7 +609,7 @@ int main() {
   //REPL Read-Eval-Print-Loop
   while (true) {
     char* raw_input = readline("$ ");
-    update_background_jobs();
+    reap_jobs();
     if (raw_input == nullptr) break;
 
     std::string line(raw_input);
