@@ -560,8 +560,6 @@ static void execute_pipeline(const std::vector<CommandStage>& stages) {
 
       next_job_id++;
       is_job = false; // Reset background state trigger
-
-      usleep(1000);
     }
     else {
       waitpid(pid, nullptr, 0);
