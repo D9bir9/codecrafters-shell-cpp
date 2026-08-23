@@ -670,6 +670,10 @@ int main() {
 
 
     if (command == "exit") break;
+    if (command == "jobs") {
+      execute_builtin(command, pipeline_stages.front().args);
+      continue;
+    }
     if (command == "cd") {
       auto cd_arg = pipeline_stages.front().args;
       std::string target_path = (cd_arg.size() > 1) ? cd_arg[1] : "";
