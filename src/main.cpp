@@ -42,8 +42,9 @@ namespace {
   };
 }
 
-const std::vector<std::string> builtins = {"echo", "exit", "type", "pwd", "cd", "complete", "jobs"};
+const std::vector<std::string> builtins = {"echo", "exit", "type", "pwd", "cd", "complete", "jobs", "history"};
 static std::unordered_map<std::string, std::string> completion_paths;
+static std::vector<std::string> complete_args;
 namespace {
   struct BackgroundJob{
     int job_id;
@@ -208,7 +209,7 @@ static void trim(std::string &s) {
 }
 
 static std::vector<std::string> Tokenize_input(const std::string& input_line) {
-  std::vector<std::string> args;
+  std::vector<std::string> args_;
   std::string current_token;
 
   bool in_single_quote = false;
@@ -248,7 +249,7 @@ static std::vector<std::string> Tokenize_input(const std::string& input_line) {
     if (!in_single_quote && !in_double_quote && std::isspace(static_cast<unsigned char>(ch))) {
       // collapse consecutive whitespace outside quotes into a single space
       if (!current_token.empty() || token_has_content) {
-        args.push_back(current_token);
+        args_.push_back(current_token);
         current_token.clear();
         token_has_content = false;
       }
@@ -260,25 +261,25 @@ static std::vector<std::string> Tokenize_input(const std::string& input_line) {
          ((ch == '1' || ch == '2') && i + 1 < input_line.size() && input_line[i + 1] == '>')) {
 
         if (!current_token.empty() || token_has_content) {
-          args.push_back(current_token);
+          args_.push_back(current_token);
           current_token.clear();
           token_has_content = false;
         }
 
         if (ch == '|') {
-          args.emplace_back("|");
+          args_.emplace_back("|");
         }
         else if (ch == '>') {
-          if (i + 1 < input_line.size() && input_line[i + 1] == '>') { args.emplace_back(">>"); i++; }
-          else args.emplace_back(">");
+          if (i + 1 < input_line.size() && input_line[i + 1] == '>') { args_.emplace_back(">>"); i++; }
+          else args_.emplace_back(">");
         }
         else if (ch == '1') {
-          if (i + 2 < input_line.size() && input_line[i + 1] == '>' && input_line[i + 2] == '>') { args.emplace_back("1>>"); i += 2; }
-          else { args.emplace_back("1>"); i++; }
+          if (i + 2 < input_line.size() && input_line[i + 1] == '>' && input_line[i + 2] == '>') { args_.emplace_back("1>>"); i += 2; }
+          else { args_.emplace_back("1>"); i++; }
         }
         else if (ch == '2') {
-          if (i + 2 < input_line.size() && input_line[i + 1] == '>' && input_line[i + 2] == '>') { args.emplace_back("2>>"); i += 2; }
-          else { args.emplace_back("2>"); i++; }
+          if (i + 2 < input_line.size() && input_line[i + 1] == '>' && input_line[i + 2] == '>') { args_.emplace_back("2>>"); i += 2; }
+          else { args_.emplace_back("2>"); i++; }
         }
         continue;
          }
@@ -290,9 +291,9 @@ static std::vector<std::string> Tokenize_input(const std::string& input_line) {
   }
 
   if (!current_token.empty() || token_has_content) {
-    args.push_back(current_token);
+    args_.push_back(current_token);
   }
-  return args;
+  return args_;
 }
 
 static char* custom_path_generator(const char* text, const int state) {
@@ -449,18 +450,18 @@ static void initialize_readline() {
   rl_bind_key('\t', rl_complete);
 }
 
-static void execute_builtin(const std::string& command, const std::vector<std::string>& args) {
+static void execute_builtin(const std::string& command, const std::vector<std::string>& args_) {
 
   if (command == "echo") {
-    for (size_t i{1}; i < args.size(); ++i) {
-      std::cout << args[i] << (i + 1 < args.size() ? " " : "");
+    for (size_t i{1}; i < args_.size(); ++i) {
+      std::cout << args_[i] << (i + 1 < args_.size() ? " " : "");
     }
     std::cout << "\n";
   }
   else if (command == "type") {
-    if (args.size() < 2) std::cout << "type: missing operand \n";
+    if (args_.size() < 2) std::cout << "type: missing operand \n";
     else {
-      const std::string& target = args[1];
+      const std::string& target = args_[1];
       if (const auto it = std::ranges::find(builtins, target); it != builtins.end()) std::cout << *it << " is a shell builtin\n";
       else if (const std::string path = find_command_in_path(target); !path.empty()) std::cout << target << " is " << path << "\n";
       else std::cout << target << ": not found\n";
@@ -540,19 +541,19 @@ static void execute_pipeline(const std::vector<CommandStage>& stages) {
         dup2(pipe_fds[1], STDOUT_FILENO);
         close(pipe_fds[1]);
       }
-      const auto&[args, out_file, err_file, out_redir, err_redir, out_app, err_app] = stages[i];
+      const auto&[args_, out_file, err_file, out_redir, err_redir, out_app, err_app] = stages[i];
       if (out_redir) std::freopen(out_file.c_str(), out_app ? "a" : "w", stdout);
       if (err_redir) std::freopen(err_file.c_str(), err_app ? "a" : "w", stderr);
 
       // 4. Route binary path discovery
-      const std::string command = args.front();
+      const std::string command = args_.front();
       if (std::ranges::find(builtins, command) != builtins.end()) {
-        execute_builtin(command, args);
+        execute_builtin(command, args_);
         std::exit(0);
       }
       if (const std::string binary_path = find_command_in_path(command); !binary_path.empty()) {
         std::vector<char*> c_args;
-        for (const auto& arg : args) c_args.push_back(const_cast<char*>(arg.c_str()));
+        for (const auto& arg : args_) c_args.push_back(const_cast<char*>(arg.c_str()));
         c_args.push_back(nullptr);
 
         execv(binary_path.c_str(), c_args.data());
@@ -573,10 +574,19 @@ static void execute_pipeline(const std::vector<CommandStage>& stages) {
   }
   // Master shell sync lock: Wait for ALL spawned processes to finish
   for (const pid_t pid : child_pids) {
+    auto it = std::ranges::find(child_pids, pid);
+
     if (is_job) {
+      if (it != child_pids.end() - 1) {
+        waitpid(pid, nullptr, 0);
+        continue;
+      }
       // Re-assemble command name for readable tracking output
       std::string full_cmd ;
-      auto args = stages.front().args;
+      for (size_t i{}; i < complete_args.size(); ++i) {
+        full_cmd += complete_args[i] + (i + 1 < complete_args.size() ? " " : "");
+      }
+
       if (active_jobs.empty()) {
         next_job_id = 1;
       }
@@ -585,9 +595,6 @@ static void execute_pipeline(const std::vector<CommandStage>& stages) {
           return a.job_id < b.job_id;
         });
         next_job_id = max_it->job_id + 1;
-      }
-      for (size_t i{}; i < args.size(); ++i) {
-        full_cmd += args[i] + (i + 1 < args.size() ? " " : "");
       }
 
       active_jobs.push_back({.job_id = next_job_id, .pid = pid, .command = full_cmd});
@@ -627,22 +634,22 @@ int main() {
     if (line.find_first_not_of(" \t\n\r") == std::string::npos) continue;
     add_history(line.c_str());
 
-    std::vector<std::string> args = Tokenize_input(line);
-    if (args.empty()) {
+    complete_args = Tokenize_input(line);
+    if (complete_args.empty()) {
       reap_jobs();
       continue;
     }
 
-    if (args.back() == "&") {
+    if (complete_args.back() == "&") {
       is_job = true;
-      args.pop_back();
+      complete_args.pop_back();
     }
 
     std::vector<CommandStage> pipeline_stages;
     CommandStage current_stage;
 
-    for (size_t i{}; i < args.size(); ++i) {
-      if (args[i] == "|") {
+    for (size_t i{}; i < complete_args.size(); ++i) {
+      if (complete_args[i] == "|") {
         if (current_stage.args.empty()) {
           std::cout << "Shell: syntax error near unexpected token '|'\n";
           pipeline_stages.clear();
@@ -652,7 +659,7 @@ int main() {
         current_stage = CommandStage();
       }
       else {
-        current_stage.args.push_back(args[i]);
+        current_stage.args.push_back(complete_args[i]);
       }
     }
 
@@ -662,7 +669,7 @@ int main() {
 
     if (pipeline_stages.empty()) continue;
 
-    if (args.back() == "|") {
+    if (complete_args.back() == "|") {
       std::cout << "Shell: syntax error near unexpected token '|'\n";
       continue;
     }
@@ -746,28 +753,28 @@ int main() {
       }
     }
     else if (command == "complete") {
-      if (args[1] == "-p") {
-        if (args.size() < 3) std::cout << "complete: missing operand \n";
+      if (complete_args[1] == "-p") {
+        if (complete_args.size() < 3) std::cout << "complete: missing operand \n";
         else {
-          if (completion_paths.contains(args[2])) {
-            std::cout << "complete -C '" << completion_paths[args[2]] << "' " << args[2] << "\n";
+          if (completion_paths.contains(complete_args[2])) {
+            std::cout << "complete -C '" << completion_paths[complete_args[2]] << "' " << complete_args[2] << "\n";
           }
           else {
-            std::cout << "complete: " << args[2] << ": no completion specification\n";
+            std::cout << "complete: " << complete_args[2] << ": no completion specification\n";
           }
         }
       }
-      else if (args[1] == "-C") {
-        if (args.size() < 4) std::cout << "complete: missing operand \n";
+      else if (complete_args[1] == "-C") {
+        if (complete_args.size() < 4) std::cout << "complete: missing operand \n";
         else {
-          completion_paths.insert_or_assign(args[3], args[2]);
+          completion_paths.insert_or_assign(complete_args[3], complete_args[2]);
         }
       }
-      else if (args[1] == "-r") {
-        if (args.size() < 3) std::cout << "complete: missing operand \n";
+      else if (complete_args[1] == "-r") {
+        if (complete_args.size() < 3) std::cout << "complete: missing operand \n";
         else {
-          if (completion_paths.contains(args[2])) {
-            completion_paths.erase(args[2]);
+          if (completion_paths.contains(complete_args[2])) {
+            completion_paths.erase(complete_args[2]);
           }
         }
       }
