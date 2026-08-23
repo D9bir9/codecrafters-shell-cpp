@@ -55,6 +55,7 @@ namespace {
   };
 }
 static bool is_job = false;
+static int n_append{};
 
 static std::vector<BackgroundJob> active_jobs;
 static int next_job_id = 1;
@@ -531,7 +532,10 @@ static void execute_builtin(const std::string& command, const std::vector<std::s
           return;
         }
         const auto filename = args_[2].c_str();
-        append_history(20, filename);
+        const int pos = where_history();
+        const int n = pos - n_append;
+        n_append = n;
+        append_history(n, filename);
       }
       else {
         std::cout << "Shell: " << args_[1] << ": numeric argument required\n";
