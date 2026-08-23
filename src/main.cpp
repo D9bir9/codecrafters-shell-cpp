@@ -580,6 +580,12 @@ static void execute_pipeline(const std::vector<CommandStage>& stages) {
       if (active_jobs.empty()) {
         next_job_id = 1;
       }
+      else {
+        const auto max_it = std::ranges::max_element(active_jobs, [](const BackgroundJob& a, const BackgroundJob& b) {
+          return a.job_id < b.job_id;
+        });
+        next_job_id = max_it->job_id + 1;
+      }
       for (size_t i{}; i < args.size(); ++i) {
         full_cmd += args[i] + (i + 1 < args.size() ? " " : "");
       }
