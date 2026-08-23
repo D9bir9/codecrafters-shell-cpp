@@ -444,19 +444,39 @@ static void execute_builtin(const std::string& command, const std::vector<std::s
       return;
     }
     int i = 0;
-    while (i < active_jobs.size()) {
+    auto it = active_jobs.begin();
+    while (it != active_jobs.end()) {
       int status;
-      // Query waitpid directly into a status integer to ensure accuracy
+      // WNOHANG checks process state without pausing/blocking execution
 
-      std::cout << "[" << active_jobs[i].job_id << "]"
+      if (const pid_t result = waitpid(it->pid, &status, WNOHANG); result > 0) {
+        // Determine how the process finished
+        std::string status_str = "Done";
+        if (WIFSIGNALED(status)) {
+          status_str = "Terminated";
+        }
+
+        // Print completion notice matching standard shell patterns
+        std::cout << "[" << it->job_id << "]"
                 << (i == active_jobs.size() - 1 ? "+" : "")
                 << (i == active_jobs.size() - 2 ? "-" : "")
                 << ((i == active_jobs.size() - 2 || i == active_jobs.size() - 1) ? "" : " ")
-                << " " << (waitpid(active_jobs[i].pid, &status, WNOHANG) > 0 ? "Done" : "Running")
+                << " " <<  status_str
                 << std::string(17, ' ')
-                << active_jobs[i].command
-                << (waitpid(active_jobs[i].pid, &status, WNOHANG) > 0  ? "\n" : " &\n"); // Done tasks must NOT append a trailing '&'
-
+                << it->command
+                << "\n"; // Done tasks must NOT append a trailing '&'
+        // Erase from active tracker
+      } else {
+        std::cout << "[" << it->job_id << "]"
+                << (i == active_jobs.size() - 1 ? "+" : "")
+                << (i == active_jobs.size() - 2 ? "-" : "")
+                << ((i == active_jobs.size() - 2 || i == active_jobs.size() - 1) ? "" : " ")
+                << " " << "Running"
+                << std::string(17, ' ')
+                << it->command
+                << " &\n"; // Done tasks must NOT append a trailing '&'
+      }
+      ++it;
       ++i;
     }
   }
