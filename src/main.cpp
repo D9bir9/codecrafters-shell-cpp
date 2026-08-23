@@ -223,7 +223,6 @@ static std::vector<std::string> Tokenize_input(const std::string& input_line) {
   bool in_double_quote = false;
   bool escape = false;
   bool token_has_content = false;
-  bool completion_flag = false;
 
 
   for (size_t i{}; i < input_line.size(); ++i) {
@@ -236,7 +235,7 @@ static std::vector<std::string> Tokenize_input(const std::string& input_line) {
       continue;
     }
 
-    if (ch == '\\' && !in_single_quote && !completion_flag) {
+    if (ch == '\\' && !in_single_quote) {
       escape = true;
       continue;
     }
@@ -487,30 +486,40 @@ static void execute_builtin(const std::string& command, const std::vector<std::s
         next_history();
       }
     }
-    else if (args_.size() == 2) {
-      if (auto is_number = std::ranges::all_of(args_[1].begin(), args_[1].end(), [](const char& a){return std::isdigit(a);}); !is_number) {
-        std::cout << "Shell: " << args_[1] << ": numeric argument required\n";
-        return;
+    else{
+      if (std::ranges::all_of(args_[1].begin(), args_[1].end(), [](const char& a){return std::isdigit(a);})) {
+        if ( args_.size() > 2) {
+          std::cout <<"Shell: history: too many arguments\n";
+          return;
+        }
+        if (const int start = std::stoi(args_[1]); start == 0) {
+          // Do nothing
+        }
+        else {
+          history_set_pos(where_history());
+          for (size_t i{}; i < start - 1; ++i) {
+            if (current_history() == nullptr) break;
+            previous_history();
+          }
+          while (true) {
+            if (current_history() == nullptr) break;
+            const int pos = where_history();
+            std::cout << pos + 1 << " " << current_history()->line << std::endl;
+            next_history();
+          }
+        }
       }
-      if (const int start = std::stoi(args_[1]); start == 0) {
-        // Do nothing
+      else if (args_[1] == "-r") {
+        if ( args_.size() > 3) {
+          std::cout <<"Shell: history: too many arguments\n";
+          return;
+        }
+        const char* filename = args_[2].c_str();
+        read_history(filename);
       }
       else {
-        history_set_pos(where_history());
-        for (size_t i{}; i < start - 1; ++i) {
-          if (current_history() == nullptr) break;
-          previous_history();
-        }
-        while (true) {
-          if (current_history() == nullptr) break;
-          const int pos = where_history();
-          std::cout << pos + 1 << " " << current_history()->line << std::endl;
-          next_history();
-        }
+        std::cout << "Shell: " << args_[1] << ": numeric argument required\n";
       }
-    }
-    else{
-      std::cout <<"Shell: history: too many arguments\n";
     }
   }
   else if (command == "jobs") {
