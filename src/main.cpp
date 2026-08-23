@@ -48,7 +48,7 @@ static std::vector<std::string> complete_args;
 namespace {
   struct BackgroundJob{
     int job_id;
-    pid_t pid;
+    std::vector<pid_t> pids;
     std::string command;
     std::string status = "Running";
     bool reported_done = false;
@@ -61,21 +61,28 @@ static int next_job_id = 1;
 
 // Cleans up background processes that have naturally terminated
 static void update_background_jobs() {
-  auto it = active_jobs.begin();
-  while (it != active_jobs.end()) {
-    int status;
+  for (auto& job : active_jobs) {
+    if (job.status != "Running") continue;
 
-    // Only check background processes that are still actively running in our tracker
-    if (it->status == "Running") {
-      if (const pid_t result = waitpid(it->pid, &status, WNOHANG); result > 0) {
-        std::string status_str = "Done";
-        if (WIFSIGNALED(status)) {
-          status_str = "Terminated";
-        }
-        it->status = status_str;
+    // A pipelined background job isn't "Done" until every stage has exited.
+    bool all_finished = true;
+    bool any_signaled = false;
+    for (const pid_t pid : job.pids) {
+      int status;
+      const pid_t result = waitpid(pid, &status, WNOHANG);
+      if (result == 0) {
+        // Still running.
+        all_finished = false;
+      } else if (result > 0 && WIFSIGNALED(status)) {
+        any_signaled = true;
       }
+      // result < 0 (ECHILD) means this pid was already reaped earlier;
+      // treat it as finished rather than blocking the whole job forever.
     }
-    ++it;
+
+    if (all_finished) {
+      job.status = any_signaled ? "Terminated" : "Done";
+    }
   }
 }
 
@@ -572,41 +579,37 @@ static void execute_pipeline(const std::vector<CommandStage>& stages) {
       }
     }
   }
-  // Master shell sync lock: Wait for ALL spawned processes to finish
-  for (const pid_t pid : child_pids) {
-    auto it = std::ranges::find(child_pids, pid);
+  if (is_job) {
+    // Backgrounded: don't block on ANY stage, not even earlier pipeline
+    // stages. Track every pid in the pipeline so update_background_jobs()
+    // can tell when the whole job (not just its last stage) has finished.
+    std::string full_cmd;
+    for (size_t i{}; i < complete_args.size(); ++i) {
+      full_cmd += complete_args[i] + (i + 1 < complete_args.size() ? " " : "");
+    }
 
-    if (is_job) {
-      if (it != child_pids.end() - 1) {
-        waitpid(pid, nullptr, 0);
-        continue;
-      }
-      // Re-assemble command name for readable tracking output
-      std::string full_cmd ;
-      for (size_t i{}; i < complete_args.size(); ++i) {
-        full_cmd += complete_args[i] + (i + 1 < complete_args.size() ? " " : "");
-      }
-
-      if (active_jobs.empty()) {
-        next_job_id = 1;
-      }
-      else {
-        const auto max_it = std::ranges::max_element(active_jobs, [](const BackgroundJob& a, const BackgroundJob& b) {
-          return a.job_id < b.job_id;
-        });
-        next_job_id = max_it->job_id + 1;
-      }
-
-      active_jobs.push_back({.job_id = next_job_id, .pid = pid, .command = full_cmd});
-      std::cout << "[" << next_job_id << "] " << pid << "\n";
-
-      next_job_id++;
-      is_job = false; // Reset background state trigger
+    if (active_jobs.empty()) {
+      next_job_id = 1;
     }
     else {
-      waitpid(pid, nullptr, 0);
-      reap_jobs();
+      const auto max_it = std::ranges::max_element(active_jobs, [](const BackgroundJob& a, const BackgroundJob& b) {
+        return a.job_id < b.job_id;
+      });
+      next_job_id = max_it->job_id + 1;
     }
+
+    active_jobs.push_back({.job_id = next_job_id, .pids = child_pids, .command = full_cmd});
+    std::cout << "[" << next_job_id << "] " << child_pids.back() << "\n";
+
+    next_job_id++;
+    is_job = false; // Reset background state trigger
+  }
+  else {
+    // Foreground: block until every stage in the pipeline finishes.
+    for (const pid_t pid : child_pids) {
+      waitpid(pid, nullptr, 0);
+    }
+    reap_jobs();
   }
 }
 
@@ -724,7 +727,12 @@ int main() {
 
 
     if (command == "exit") break;
-    if (command == "jobs") {
+    if (command == "jobs" && pipeline_stages.size() == 1 &&
+        !pipeline_stages.front().out_redir && !pipeline_stages.front().err_redir) {
+      // Run directly in the shell process (not forked) so std::erase_if
+      // actually mutates the real active_jobs vector. Only safe to take
+      // this shortcut when jobs isn't piped or redirected -- those cases
+      // fall through to execute_pipeline below, same as any other builtin.
       execute_builtin(command, pipeline_stages.front().args);
       continue;
     }
