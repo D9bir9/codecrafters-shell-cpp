@@ -456,7 +456,7 @@ static void execute_builtin(const std::string& command, const std::vector<std::s
 
       // Match exact posix tester alignments: "[id]marker  Running                 command &"
       std::cout << "[" << active_jobs[i].job_id << "]"
-                << current_marker
+                << current_marker << " "
                 << active_jobs[i].status << std::string(17, ' ') // Stable, uniform whitespace columns
                 << active_jobs[i].command
                 << " &\n";
