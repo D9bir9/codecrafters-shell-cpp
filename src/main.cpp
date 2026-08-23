@@ -477,6 +477,42 @@ static void execute_builtin(const std::string& command, const std::vector<std::s
   else if (command == "pwd") {
       std::cout << fs::current_path().string() << "\n";
   }
+  else if (command == "history") {
+    if (args_.size() == 1) {
+      history_set_pos(0);
+      while (true) {
+        if (current_history() == nullptr) break;
+        const int pos = where_history();
+        std::cout << pos + 1 << " " << current_history()->line << std::endl;
+        next_history();
+      }
+    }
+    else if (args_.size() == 2) {
+      if (auto is_number = std::ranges::all_of(args_[1].begin(), args_[1].end(), [](const char& a){return std::isdigit(a);}); !is_number) {
+        std::cout << "Shell: " << args_[1] << ": numeric argument required\n";
+        return;
+      }
+      if (const int start = std::stoi(args_[1]); start == 0) {
+        // Do nothing
+      }
+      else {
+        history_set_pos(where_history());
+        for (size_t i{}; i < start - 1; ++i) {
+          if (current_history() == nullptr) break;
+          previous_history();
+        }
+        while (true) {
+          if (current_history() == nullptr) break;
+          const int pos = where_history();
+          std::cout << pos + 1 << " " << current_history()->line << std::endl;
+          next_history();
+        }
+      }
+    }
+    else{
+      std::cout <<"Shell: history: too many arguments\n";
+    }
+  }
   else if (command == "jobs") {
     if (active_jobs.empty()) {
       return;
@@ -787,16 +823,6 @@ int main() {
           !pipeline_stages.front().out_redir && !pipeline_stages.front().err_redir) {
         execute_builtin(command, pipeline_stages.front().args);
         continue;
-      }
-      if (command == "history") {
-        auto h_list = history_list();
-        size_t line_number{1};
-
-        while (*(h_list) != nullptr) {
-          std::cout << line_number << " " << (*h_list)->line << "\n";
-          h_list = h_list + 1;
-          line_number++;
-        }
       }
       if (command == "cd") {
         auto cd_arg = pipeline_stages.front().args;
