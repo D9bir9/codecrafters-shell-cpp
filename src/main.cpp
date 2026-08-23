@@ -451,8 +451,8 @@ static void execute_builtin(const std::string& command, const std::vector<std::s
     for (size_t i = 0; i < active_jobs.size(); ++i) {
       // Safely apply the standard spacing prefix padding
       std::string current_marker = " ";
-      if (i == active_jobs.size() - 1) current_marker = "+";
-      else if (i == active_jobs.size() - 2) current_marker = "-";
+      if (i == active_jobs.size() - 1) current_marker = "+ ";
+      else if (i == active_jobs.size() - 2) current_marker = "- ";
 
       // Match exact posix tester alignments: "[id]marker  Running                 command &"
       std::cout << "[" << active_jobs[i].job_id << "]"
