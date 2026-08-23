@@ -533,7 +533,8 @@ static void execute_builtin(const std::string& command, const std::vector<std::s
         const auto filename = args_[2].c_str();
         int n = 0;
         int offset = where_history();
-        while (offset < 0) {
+        history_set_pos(offset);
+        while (offset > 0) {
           previous_history();
           offset = where_history();
           ++n;
