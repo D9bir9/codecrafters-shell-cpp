@@ -833,6 +833,11 @@ int main() {
         execute_builtin(command, pipeline_stages.front().args);
         continue;
       }
+      if (command == "history" && pipeline_stages.size() == 1 &&
+          !pipeline_stages.front().out_redir && !pipeline_stages.front().err_redir) {
+        execute_builtin(command, pipeline_stages.front().args);
+        continue;
+          }
       if (command == "cd") {
         auto cd_arg = pipeline_stages.front().args;
         std::string target_path = (cd_arg.size() > 1) ? cd_arg[1] : "";
