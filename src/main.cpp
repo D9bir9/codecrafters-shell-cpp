@@ -531,7 +531,7 @@ static void execute_builtin(const std::string& command, const std::vector<std::s
           return;
         }
         const auto filename = args_[2].c_str();
-        append_history(6, filename);
+        append_history(20, filename);
       }
       else {
         std::cout << "Shell: " << args_[1] << ": numeric argument required\n";
