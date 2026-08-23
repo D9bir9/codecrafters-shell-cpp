@@ -548,6 +548,7 @@ static void execute_pipeline(const std::vector<CommandStage>& stages) {
       const std::string command = args.front();
       if (std::ranges::find(builtins, command) != builtins.end()) {
         execute_builtin(command, args);
+        reap_jobs();
         std::exit(0);
       }
       if (const std::string binary_path = find_command_in_path(command); !binary_path.empty()) {
@@ -556,6 +557,7 @@ static void execute_pipeline(const std::vector<CommandStage>& stages) {
         c_args.push_back(nullptr);
 
         execv(binary_path.c_str(), c_args.data());
+        reap_jobs();
       }
       else std::cerr << command << ": command not found\n";
       std::exit(1);
@@ -609,7 +611,6 @@ int main() {
   //REPL Read-Eval-Print-Loop
   while (true) {
     char* raw_input = readline("$ ");
-    reap_jobs();
     if (raw_input == nullptr) break;
 
     std::string line(raw_input);
@@ -619,7 +620,10 @@ int main() {
     add_history(line.c_str());
 
     std::vector<std::string> args = Tokenize_input(line);
-    if (args.empty()) continue;
+    if (args.empty()) {
+      reap_jobs();
+      continue;
+    }
 
     if (args.back() == "&") {
       is_job = true;
