@@ -548,7 +548,6 @@ static void execute_pipeline(const std::vector<CommandStage>& stages) {
       const std::string command = args.front();
       if (std::ranges::find(builtins, command) != builtins.end()) {
         execute_builtin(command, args);
-        reap_jobs();
         std::exit(0);
       }
       if (const std::string binary_path = find_command_in_path(command); !binary_path.empty()) {
@@ -557,7 +556,6 @@ static void execute_pipeline(const std::vector<CommandStage>& stages) {
         c_args.push_back(nullptr);
 
         execv(binary_path.c_str(), c_args.data());
-        reap_jobs();
       }
       else std::cerr << command << ": command not found\n";
       std::exit(1);
@@ -574,6 +572,7 @@ static void execute_pipeline(const std::vector<CommandStage>& stages) {
     }
   }
   // Master shell sync lock: Wait for ALL spawned processes to finish
+  reap_jobs();
   for (const pid_t pid : child_pids) {
     if (is_job) {
       // Re-assemble command name for readable tracking output
