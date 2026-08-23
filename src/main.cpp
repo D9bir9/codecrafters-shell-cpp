@@ -73,9 +73,10 @@ static void update_background_jobs() {
       it->status = status_str;
 
       // Print completion notice matching standard shell patterns
+      /*
       std::cout << "[" << it->job_id << "]" << (it->job_id == active_jobs.size() -1 ? "+" : "") << (it->job_id == active_jobs
         .size() -2 ? "-" : "") << ((it->job_id == active_jobs.size() - 2 || it->job_id == active_jobs.size() - 1) ? "" : " ") << " " << status_str << std::string(17, ' ') << it->command << "\n";
-
+*/
       // Erase from active tracker
       //it = active_jobs.erase(it);
     } else {
