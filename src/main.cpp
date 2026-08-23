@@ -533,7 +533,7 @@ static void execute_builtin(const std::string& command, const std::vector<std::s
         }
         const auto filename = args_[2].c_str();
         const int pos = where_history();
-        const int n = pos - n_append;
+        const int n = pos - n_append + 1;
         n_append = n;
         append_history(n, filename);
       }
