@@ -443,17 +443,27 @@ static void execute_builtin(const std::string& command, const std::vector<std::s
     if (active_jobs.empty()) {
       return;
     }
+    int i = 0;
+    while (i < active_jobs.size()) {
+      int status;
+      // Query waitpid directly into a status integer to ensure accuracy
+      const pid_t result = waitpid(active_jobs[i].pid, &status, WNOHANG);
+       const bool is_done = (result > 0);
 
-    // Iterate and print ONLY jobs that are actively tracked as running
-    for (size_t i = 0; i < active_jobs.size(); ++i) {
       std::cout << "[" << active_jobs[i].job_id << "]"
                 << (i == active_jobs.size() - 1 ? "+" : "")
                 << (i == active_jobs.size() - 2 ? "-" : "")
                 << ((i == active_jobs.size() - 2 || i == active_jobs.size() - 1) ? "" : " ")
-                << " Running"
+                << " " << (is_done ? "Done" : "Running")
                 << std::string(17, ' ')
                 << active_jobs[i].command
-                << " &\n";
+                << (is_done ? "\n" : " &\n"); // Done tasks must NOT append a trailing '&'
+
+      if (is_done) {
+        active_jobs.erase(active_jobs.begin() + i);
+      } else {
+        ++i;
+      }
     }
   }
 }
@@ -561,7 +571,6 @@ int main() {
   //REPL Read-Eval-Print-Loop
   while (true) {
     char* raw_input = readline("$ ");
-    update_background_jobs();
     if (raw_input == nullptr) break;
 
     std::string line(raw_input);
