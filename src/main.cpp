@@ -463,7 +463,6 @@ static void execute_builtin(const std::string& command, const std::vector<std::s
       // Flag that this specific finished job has now been printed to stdout
       if (active_jobs[i].status == "Done") {
         active_jobs[i].reported_done = true;
-        std::cout << "yes\n";
       }
     }
 
