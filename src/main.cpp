@@ -542,6 +542,14 @@ static void execute_builtin(const std::string& command, const std::vector<std::s
       }
     }
   }
+  else if (command == "declare") {
+    if (args_[1] == "-p") {
+      if (args_.size() > 3) {
+        return;
+      }
+      std::cout << "declare: " << args_[2] << ": not found\n";
+    }
+  }
   else if (command == "jobs") {
     if (active_jobs.empty()) {
       return;
@@ -854,6 +862,11 @@ int main() {
         write_history(hist_filename.c_str());
         should_exit_shell = true;
         break;
+      }
+      if (command == "declare" && pipeline_stages.size() == 1 &&
+          !pipeline_stages.front().out_redir && !pipeline_stages.front().err_redir) {
+        execute_builtin(command, pipeline_stages.front().args);
+        continue;
       }
       if (command == "jobs" && pipeline_stages.size() == 1 &&
           !pipeline_stages.front().out_redir && !pipeline_stages.front().err_redir) {
