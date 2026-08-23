@@ -572,7 +572,6 @@ static void execute_pipeline(const std::vector<CommandStage>& stages) {
     }
   }
   // Master shell sync lock: Wait for ALL spawned processes to finish
-  reap_jobs();
   for (const pid_t pid : child_pids) {
     if (is_job) {
       // Re-assemble command name for readable tracking output
@@ -590,6 +589,7 @@ static void execute_pipeline(const std::vector<CommandStage>& stages) {
     }
     else {
       waitpid(pid, nullptr, 0);
+      reap_jobs();
     }
   }
 }
