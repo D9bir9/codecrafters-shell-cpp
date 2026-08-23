@@ -517,6 +517,14 @@ static void execute_builtin(const std::string& command, const std::vector<std::s
         const char* filename = args_[2].c_str();
         read_history(filename);
       }
+      else if (args_[1] == "-w") {
+        if ( args_.size() > 3) {
+          std::cout <<"Shell: history: too many arguments\n";
+          return;
+        }
+        const char* filename = args_[2].c_str();
+        write_history(filename);
+      }
       else {
         std::cout << "Shell: " << args_[1] << ": numeric argument required\n";
       }
