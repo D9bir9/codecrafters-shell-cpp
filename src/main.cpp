@@ -687,6 +687,9 @@ int main() {
 
   using_history();
 
+  auto hist_filename = *get_env_var("HISTFILE");
+  read_history(hist_filename.c_str());
+
   // TODO: Uncomment the code below to pass the first stage
   //REPL Read-Eval-Print-Loop
   while (true) {
