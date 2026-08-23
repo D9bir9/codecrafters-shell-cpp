@@ -531,15 +531,13 @@ static void execute_builtin(const std::string& command, const std::vector<std::s
           return;
         }
         const auto filename = args_[2].c_str();
-        int n = 0;
         int offset = where_history();
         history_set_pos(offset);
         while (offset > 0) {
+          append_history(1, filename);
           previous_history();
           offset = where_history();
-          ++n;
         }
-        append_history(n, filename);
       }
       else {
         std::cout << "Shell: " << args_[1] << ": numeric argument required\n";
