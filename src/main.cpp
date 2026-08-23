@@ -447,23 +447,17 @@ static void execute_builtin(const std::string& command, const std::vector<std::s
     while (i < active_jobs.size()) {
       int status;
       // Query waitpid directly into a status integer to ensure accuracy
-      const pid_t result = waitpid(active_jobs[i].pid, &status, WNOHANG);
-       const bool is_done = (result > 0);
 
       std::cout << "[" << active_jobs[i].job_id << "]"
                 << (i == active_jobs.size() - 1 ? "+" : "")
                 << (i == active_jobs.size() - 2 ? "-" : "")
                 << ((i == active_jobs.size() - 2 || i == active_jobs.size() - 1) ? "" : " ")
-                << " " << (is_done ? "Done" : "Running")
+                << " " << (waitpid(active_jobs[i].pid, &status, WNOHANG) > 0 ? "Done" : "Running")
                 << std::string(17, ' ')
                 << active_jobs[i].command
-                << (is_done ? "\n" : " &\n"); // Done tasks must NOT append a trailing '&'
+                << (waitpid(active_jobs[i].pid, &status, WNOHANG) > 0  ? "\n" : " &\n"); // Done tasks must NOT append a trailing '&'
 
-      if (is_done) {
-        active_jobs.erase(active_jobs.begin() + i);
-      } else {
-        ++i;
-      }
+      ++i;
     }
   }
 }
