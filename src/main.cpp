@@ -464,9 +464,9 @@ static void execute_builtin(const std::string& command, const std::vector<std::s
                 << active_jobs[i].command
                 <<end_marker <<"\n";
     }
-    if (auto it = std::ranges::find_if(active_jobs.begin(), active_jobs.end(), [](auto &job){return job.status == "Done"; }); it != active_jobs.end()) {
-      active_jobs.erase(it);
-    }
+      std::erase_if(active_jobs, [](const auto& job) {
+      return job.status == "Done";
+    });
   }
 }
 
