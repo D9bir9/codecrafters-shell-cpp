@@ -448,8 +448,13 @@ static void execute_builtin(const std::string& command, const std::vector<std::s
     while (i < active_jobs.size()) {
       const auto&[job_id, pid, j_command] = active_jobs[i];
       const bool is_done = waitpid(pid, nullptr, WNOHANG) > 0;
-      std::cout << "[" << job_id << "]" << (i == active_jobs.size() -1 ? "+" : "") << (i == active_jobs
-        .size() -2 ? "-" : "") << ((i == active_jobs.size() - 2 || i == active_jobs.size() - 1) ? "" : " ") << " " << (is_done ? "done" : "Running") << (is_done ? std::string(20, ' ') : std::string(17, ' ')) << j_command << " &\n";
+      std::cout << "[" << job_id << "]" <<
+        (i == active_jobs.size() -1 ? "+" : "") <<
+        (i == active_jobs.size() -2 ? "-" : "") <<
+        ((i == active_jobs.size() - 2 || i == active_jobs.size() - 1) ? "" : " ") <<
+        " " << (is_done ? "Done" : "Running") <<
+        (is_done ? std::string(20, ' ') : std::string(17, ' ')) <<
+        j_command << (is_done ? "\n" : " &\n");
       if (is_done) {
         active_jobs.erase(active_jobs.begin() + i);
       }
