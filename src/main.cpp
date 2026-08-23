@@ -440,26 +440,29 @@ static void execute_builtin(const std::string& command, const std::vector<std::s
       std::cout << fs::current_path().string() << "\n";
   }
   else if (command == "jobs") {
-    //update_background_jobs(); // Refresh list immediately before reading
     if (active_jobs.empty()) {
       return;
     }
     int i = 0;
     while (i < active_jobs.size()) {
-      const auto&[job_id, pid, j_command] = active_jobs[i];
-      const bool is_done = waitpid(pid, nullptr, WNOHANG) > 0;
-      std::cout << "[" << job_id << "]" <<
-      (i == active_jobs.size() -1 ? "+" : "") <<
-      (i == active_jobs.size() -2 ? "-" : "") <<
-      ((i == active_jobs.size() - 2 || i == active_jobs.size() - 1) ? "" : " ") <<
-      " " << (is_done ? "Done" : "Running") <<
-      (is_done ? std::string(20, ' ') : std::string(17, ' ')) <<
-      j_command << (is_done ? "\n" : " &\n");
+      int status;
+      // Query waitpid directly into a status integer to ensure accuracy
+      const pid_t result = waitpid(active_jobs[i].pid, &status, WNOHANG);
+      const bool is_done = (result > 0);
+
+      std::cout << "[" << active_jobs[i].job_id << "]"
+                << (i == active_jobs.size() - 1 ? "+" : "")
+                << (i == active_jobs.size() - 2 ? "-" : "")
+                << ((i == active_jobs.size() - 2 || i == active_jobs.size() - 1) ? "" : " ")
+                << " " << (is_done ? "Done" : "Running")
+                << std::string(17, ' ')
+                << active_jobs[i].command
+                << (is_done ? "\n" : " &\n"); // Done tasks must NOT append a trailing '&'
+
       if (is_done) {
         active_jobs.erase(active_jobs.begin() + i);
-      }
-      else {
-        i++;
+      } else {
+        ++i;
       }
     }
   }
@@ -568,7 +571,7 @@ int main() {
   //REPL Read-Eval-Print-Loop
   while (true) {
     char* raw_input = readline("$ ");
-    //update_background_jobs();
+    update_background_jobs();
     if (raw_input == nullptr) break;
 
     std::string line(raw_input);
