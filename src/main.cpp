@@ -243,6 +243,7 @@ static std::vector<std::string> Tokenize_input(const std::string& input_line) {
     if (is_variable) {
       if (ch == ' ') {
         if (declared_variables.contains(d_var)) {
+          trim(d_var);
           d_var = declared_variables[d_var];
           current_token += d_var;
           is_variable = false;
