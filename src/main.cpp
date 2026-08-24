@@ -94,7 +94,7 @@ static void reap_jobs() {
     return;
   }
   update_background_jobs();
-  // PHASE 1: Stable printing layout matching POSIX rules
+  // printing layout for job completion
   for (size_t i = 0; i < active_jobs.size(); ++i) {
     std::string current_marker = " ";
 
@@ -111,24 +111,25 @@ static void reap_jobs() {
               << active_jobs[i].command
               <<"\n";
 
-      // Flag that this specific finished job has now been printed to stdout
+      // Mark the finished job as done
       if (active_jobs[i].status == "Done") {
         active_jobs[i].reported_done = true;
       }
     }
   }
-  // PHASE 2: Erase elements ONLY if they were processed and printed as Done
+  // Erase elements f they were processed and reported as Done
   std::erase_if(active_jobs, [](const BackgroundJob& job) {
     return job.reported_done;
   });
 }
 
+// This fuction sets up the shell to ignore Ctrl+C and Ctrl+Z so the shell only dies when we run exit command
 static void setup_shell_signals() {
-  // 1. Ignore SIGINT (Ctrl+C) in the parent shell process
+  // Ignore SIGINT (Ctrl+C) in the parent shell process
   // This stops the shell itself from dying when you hit Ctrl+C
   std::signal(SIGINT, SIG_IGN);
 
-  // 2. Ignore SIGTSTP (Ctrl+Z) in the parent shell process
+  // Ignore SIGTSTP (Ctrl+Z) in the parent shell process
   // This stops the shell from freezing/suspending in the background
   std::signal(SIGTSTP, SIG_IGN);
 }
@@ -372,7 +373,7 @@ static char* custom_path_generator(const char* text, const int state) {
     // Get the full command line to find out what command we are running
     // rl_line_buffer contains the raw characters currently typed in the shell
     const std::string line(rl_line_buffer);
-    const std::vector<std::string> tokens = Tokenize_input(line);
+    const std::vector<std::string> tokens = Tokenize_input(line); // tokenize the current line
     if (tokens.empty()) return nullptr;
     std::string complete_line;
     for (size_t i{}; i < tokens.size();++i) {
@@ -389,8 +390,8 @@ static char* custom_path_generator(const char* text, const int state) {
         raw_script_path = raw_script_path.substr(1, raw_script_path.length() - 2);
       }
 
-      // 2. Identify the word being completed (argv[2]) and the previous word (argv[3])
-      const std::string current_word = text; // e.g., "set"
+      //Identify the word being completed (argv[2]) and the previous word (argv[3])
+      const std::string current_word = text; //
       std::string prev_word;
 
       // Find where we are in the token stream to grab the previous word safely
@@ -468,7 +469,7 @@ static char* command_generator(const char* text, const int state) {
             }
           }
         } catch (const std::exception&) {
-          // Gracefully ignore directory permission errors during path scanning
+          // ignore directory permission errors during path scanning
         }
       }
       // Deduplicate commands found across different PATH folders
@@ -478,7 +479,7 @@ static char* command_generator(const char* text, const int state) {
     }
   }
 
-  // 1. Return matches from your custom shell built-ins
+  //Return matches from your custom shell built-ins
   while (list_index < builtins.size()) {
     const std::string& cmd = builtins[list_index++];
     if (cmd.compare(0, len, prefix) == 0) {
@@ -486,7 +487,7 @@ static char* command_generator(const char* text, const int state) {
     }
   }
 
-  // 2. Return deduplicated matches from the system PATH variables
+  // else Return deduplicated matches from the system PATH variables
   if (path_match_index < path_matches.size()) {
     return strdup(path_matches[path_match_index++].c_str());
   }
@@ -502,7 +503,7 @@ static char** shell_completion(const char* text, const int start, int end) {
   const std::string line(rl_line_buffer);
 
   if (const std::vector<std::string> tokens = Tokenize_input(line); !tokens.empty()) {
-    // Intercept: If this command has a registered autocompleter script, use it!
+    // Intercept: If this command has a registered autocompleter script
     if (const std::string& cmd = tokens.front(); completion_paths.contains(cmd)) {
       return rl_completion_matches(text, custom_path_generator);
     }
@@ -643,7 +644,7 @@ static void execute_builtin(const std::string& command, const std::vector<std::s
       return;
     }
     update_background_jobs();
-    // PHASE 1: Stable printing layout matching POSIX rules
+
     for (size_t i = 0; i < active_jobs.size(); ++i) {
       std::string current_marker = " ";
       std::string end_marker = " &";
@@ -664,13 +665,11 @@ static void execute_builtin(const std::string& command, const std::vector<std::s
                 << active_jobs[i].command
                 << end_marker << "\n";
 
-      // Flag that this specific finished job has now been printed to stdout
       if (active_jobs[i].status == "Done") {
         active_jobs[i].reported_done = true;
       }
     }
 
-    // PHASE 2: Erase elements ONLY if they were processed and printed as Done
     std::erase_if(active_jobs, [](const BackgroundJob& job) {
       return job.reported_done;
     });
