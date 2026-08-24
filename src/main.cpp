@@ -566,8 +566,8 @@ static void execute_builtin(const std::string& command, const std::vector<std::s
     }
     else{
       for (int i{1}; i < args_.size(); ++i) {
-        bool invalid = std::ranges::any_of(args_[i], [](const unsigned char c){return c == '-';});
-        if (isalpha(args_[i].front()) || args_[i].front() == '_' || invalid) {
+        bool has_hyphen = std::ranges::any_of(args_[i], [](const unsigned char c){return c == '-';});
+        if (isalpha(args_[i].front()) || args_[i].front() == '_' || !has_hyphen) {
           if (const auto it = args_[i].find('='); it != std::string::npos) {
             const std::string param = args_[i].substr(0, it);
             std::string value = args_[i].substr(it + 1);
