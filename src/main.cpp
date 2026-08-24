@@ -237,24 +237,30 @@ static std::vector<std::string> Tokenize_input(const std::string& input_line) {
       if (ch == ' ') {
         if (declared_variables.contains(d_var)) {
           d_var = declared_variables[d_var];
-          current_token+= d_var;
-          args_.push_back(current_token);
-          d_var.clear();
-          current_token.clear();
-          token_has_content = false;
-          is_variable = false;
-          continue;
         }
+        else {
+          d_var = "";
+        }
+        current_token+= d_var;
+        args_.push_back(current_token);
+        d_var.clear();
+        current_token.clear();
+        token_has_content = false;
+        is_variable = false;
+        continue;
 
       }
       if (ch == '}') {
         if (declared_variables.contains(d_var)) {
           d_var = declared_variables[d_var];
-          current_token+= d_var;
-          d_var.clear();
-          is_variable = false;
-          continue;
         }
+        else {
+          d_var = "";
+        }
+        current_token+= d_var;
+        d_var.clear();
+        is_variable = false;
+        continue;
       }
       d_var.push_back(ch);
       continue;
@@ -344,11 +350,11 @@ static std::vector<std::string> Tokenize_input(const std::string& input_line) {
     if (is_variable) {
       if (declared_variables.contains(d_var)) {
         d_var = declared_variables[d_var];
-        current_token+= d_var;
       }
       else {
-        current_token += d_var;
+        d_var = "";
       }
+      current_token += d_var;
     }
     args_.push_back(current_token);
   }
