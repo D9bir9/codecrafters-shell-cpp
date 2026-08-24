@@ -253,9 +253,7 @@ static std::vector<std::string> Tokenize_input(const std::string& input_line) {
         else {
           d_var = "";
         }
-        if (in_single_quote || in_double_quote) {
-          d_var.push_back(ch);
-        }
+        d_var.push_back(ch);
         current_token = d_var;
         if (current_token.empty()) {
           args_.emplace_back(" ");
