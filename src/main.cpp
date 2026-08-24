@@ -235,32 +235,21 @@ static std::vector<std::string> Tokenize_input(const std::string& input_line) {
 
     if (ch == '$' && !escape) {
       if (i + 1 < input_line.size() && std::isalpha(input_line[i + 1])) {
-        if (!current_token.empty() || token_has_content) {
-          args_.push_back(current_token);
-          current_token.clear();
-          token_has_content = false;
-        }
         is_variable = true;
         continue;
       }
     }
 
     if (is_variable) {
-      if (ch == ' ' || i == input_line.size() - 1) {
-        if (declared_variables.contains(current_token)) {
-          current_token = declared_variables[current_token];
+      if (ch == ' ') {
+        if (declared_variables.contains(d_var)) {
+          d_var = declared_variables[d_var];
+          current_token += d_var;
+          is_variable = false;
+          continue;
         }
-        else {
-          current_token = "";
-        }
-        args_.push_back(current_token);
-        current_token.clear();
-        token_has_content = false;
-        is_variable = false;
-        continue;
       }
-      current_token.push_back(ch);
-      continue;
+      d_var.push_back(ch);
     }
 
     if (escape) {
