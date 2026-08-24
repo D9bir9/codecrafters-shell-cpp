@@ -889,7 +889,9 @@ int main() {
       std::string command = pipeline_stages.front().args.front();
 
       if (command == "exit") {
-        write_history(hist_file_opt->c_str());
+        if (hist_file_opt.has_value()) {
+          write_history(hist_file_opt->c_str());
+        }
         should_exit_shell = true;
         break;
       }
