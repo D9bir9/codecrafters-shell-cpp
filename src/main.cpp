@@ -566,13 +566,18 @@ static void execute_builtin(const std::string& command, const std::vector<std::s
     }
     else{
       for (int i{1}; i < args_.size(); ++i) {
-        if (const auto it = args_[i].find('='); it != std::string::npos) {
-          const std::string param = args_[i].substr(0, it);
-          std::string value = args_[i].substr(it + 1);
-          declared_variables.insert_or_assign(param, value);
+        if (isalpha(args_[i].front()) || args_[i].front() == '_') {
+          if (const auto it = args_[i].find('='); it != std::string::npos) {
+            const std::string param = args_[i].substr(0, it);
+            std::string value = args_[i].substr(it + 1);
+            declared_variables.insert_or_assign(param, value);
+          }
+          else {
+            declared_variables.insert_or_assign(args_[i], args_[i]);
+          }
         }
         else {
-          declared_variables.insert_or_assign(args_[i], args_[i]);
+          std::cout << "declare: `" << args_[i] << "`: not a valid identifier\n";
         }
       }
     }
