@@ -577,7 +577,7 @@ static void execute_builtin(const std::string& command, const std::vector<std::s
           }
         }
         else {
-          std::cout << "declare: `" << args_[i] << "`: not a valid identifier\n";
+          std::cout << "declare: `" << args_[i] << "': not a valid identifier\n";
         }
       }
     }
