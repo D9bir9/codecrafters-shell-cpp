@@ -236,6 +236,11 @@ static std::vector<std::string> Tokenize_input(const std::string& input_line) {
     if (ch == '$' && !escape) {
       if (i + 1 < input_line.size() && std::isalpha(input_line[i + 1])) {
         is_variable = true;
+        if (!current_token.empty() || token_has_content) {
+          args_.push_back(current_token);
+          current_token.clear();
+          token_has_content = false;
+        }
         continue;
       }
     }
@@ -251,7 +256,12 @@ static std::vector<std::string> Tokenize_input(const std::string& input_line) {
         if (in_single_quote || in_double_quote) {
           d_var.push_back(ch);
         }
-        current_token += d_var;
+        current_token = d_var;
+        if (current_token.empty()) {
+          args_.push_back(current_token);
+          current_token.clear();
+          d_var.clear();
+        }
         is_variable = false;
         continue;
       }
