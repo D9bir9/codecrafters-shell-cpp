@@ -253,7 +253,9 @@ static std::vector<std::string> Tokenize_input(const std::string& input_line) {
         else {
           current_token = "";
         }
-
+        args_.push_back(current_token);
+        current_token.clear();
+        token_has_content = false;
         is_variable = false;
         continue;
       }
