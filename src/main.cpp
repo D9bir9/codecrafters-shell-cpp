@@ -233,23 +233,14 @@ static std::vector<std::string> Tokenize_input(const std::string& input_line) {
   for (size_t i{}; i < input_line.size(); ++i) {
     const char ch = input_line[i];
 
-    if (ch == '$' && !escape) {
-      if (i + 1 < input_line.size() && std::isalpha(input_line[i + 1])) {
-        is_variable = true;
-        continue;
-      }
-    }
-
     if (is_variable) {
-      if (ch == ' ' || i == input_line.size() - 1) {
-        trim(d_var);
+      if (ch == ' ') {
         if (declared_variables.contains(d_var)) {
           d_var = declared_variables[d_var];
-          std::cout << d_var <<"| ---->";
-          current_token = d_var;
+          current_token+= d_var;
           args_.push_back(current_token);
-          current_token.clear();
           d_var.clear();
+          current_token.clear();
           token_has_content = false;
           is_variable = false;
           continue;
@@ -257,6 +248,13 @@ static std::vector<std::string> Tokenize_input(const std::string& input_line) {
       }
       d_var.push_back(ch);
       continue;
+    }
+
+    if (ch == '$' && !escape) {
+      if (i + 1 < input_line.size() && std::isalpha(input_line[i + 1])) {
+        is_variable = true;
+        continue;
+      }
     }
 
     if (escape) {
@@ -328,6 +326,15 @@ static std::vector<std::string> Tokenize_input(const std::string& input_line) {
   }
 
   if (!current_token.empty() || token_has_content) {
+    if (is_variable) {
+      if (declared_variables.contains(d_var)) {
+        d_var = declared_variables[d_var];
+        current_token+= d_var;
+      }
+      else {
+        current_token += d_var;
+      }
+    }
     args_.push_back(current_token);
   }
   return args_;
