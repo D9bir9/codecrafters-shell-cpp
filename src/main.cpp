@@ -221,15 +221,43 @@ static void trim(std::string &s) {
 static std::vector<std::string> Tokenize_input(const std::string& input_line) {
   std::vector<std::string> args_;
   std::string current_token;
+  std::string d_var;
 
   bool in_single_quote = false;
   bool in_double_quote = false;
   bool escape = false;
   bool token_has_content = false;
+  bool is_variable = false;
 
 
   for (size_t i{}; i < input_line.size(); ++i) {
     const char ch = input_line[i];
+
+    if (ch == '$' && !escape) {
+      if (i + 1 < input_line.size() && std::isalpha(input_line[i + 1])) {
+        is_variable = true;
+        continue;
+      }
+    }
+
+    if (is_variable) {
+      if (ch == ' ') {
+        if (declared_variables.contains(d_var)) {
+          d_var = declared_variables[d_var];
+        }
+        else {
+          d_var = "";
+        }
+        if (in_single_quote || in_double_quote) {
+          d_var.push_back(ch);
+        }
+        current_token += d_var;
+        is_variable = false;
+        continue;
+      }
+      d_var.push_back(ch);
+      continue;
+    }
 
     if (escape) {
       current_token.push_back(ch);
@@ -780,7 +808,7 @@ int main() {
 
     bool should_exit_shell = false;
 
-    // PASS 1: validate every segment (pipe structure, redirection syntax)
+    // validate every segment (pipe structure, redirection syntax)
     // before executing ANY of them. Real bash parses the whole line first;
     // a syntax error anywhere means nothing on the line runs at all -- so
     // "echo hi & &" must not background "echo hi" just because the error
@@ -871,9 +899,8 @@ int main() {
           }
         }
         if (!stage.args.empty()) {
-          for (size_t k{1}; k < stage.args.size(); ++k) {
-            trim(stage.args[k]);
-          }
+          trim(stage.args[0]);
+          // TODO: Expanding variables
         }
       }
 
