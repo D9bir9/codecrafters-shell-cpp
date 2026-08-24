@@ -45,6 +45,7 @@ namespace {
 const std::vector<std::string> builtins = {"echo", "exit", "type", "pwd", "cd", "complete", "jobs", "history", "declare"};
 static std::unordered_map<std::string, std::string> completion_paths;
 static std::vector<std::string> complete_args;
+static std::unordered_map<std::string, std::string> declared_variables;
 namespace {
   struct BackgroundJob{
     int job_id;
@@ -54,6 +55,7 @@ namespace {
     bool reported_done = false;
   };
 }
+
 static bool is_job = false;
 static int n_append{};
 
@@ -457,6 +459,14 @@ static void initialize_readline() {
   rl_bind_key('\t', rl_complete);
 }
 
+static void hist_append(const char* file) {
+  const auto filename = file;
+  const int pos = where_history();
+  const int n = pos - n_append + 1;
+  n_append = n;
+  append_history(n, filename);
+}
+
 static void execute_builtin(const std::string& command, const std::vector<std::string>& args_) {
 
   if (command == "echo") {
@@ -531,11 +541,7 @@ static void execute_builtin(const std::string& command, const std::vector<std::s
           std::cout <<"Shell: history: too many arguments\n";
           return;
         }
-        const auto filename = args_[2].c_str();
-        const int pos = where_history();
-        const int n = pos - n_append + 1;
-        n_append = n;
-        append_history(n, filename);
+        hist_append(args_[2].c_str());
       }
       else {
         std::cout << "Shell: " << args_[1] << ": numeric argument required\n";
@@ -543,11 +549,32 @@ static void execute_builtin(const std::string& command, const std::vector<std::s
     }
   }
   else if (command == "declare") {
-    if (args_[1] == "-p") {
-      if (args_.size() > 3) {
-        return;
+    if (args_.size() == 1) {
+
+    }
+    else if (args_[1] == "-p") {
+      if (args_.size() > 2) {
+        for (size_t i{2}; i < args_.size(); ++i) {
+          if (declared_variables.contains(args_[i])) {
+            std::cout << "declare -- " << args_[i] << "=\"" <<declared_variables[args_[i]] << "\"" << "\n";
+          }
+          else {
+            std::cout << "declare: " << args_[i] << ": not found\n";
+          }
+        }
       }
-      std::cout << "declare: " << args_[2] << ": not found\n";
+    }
+    else{
+      for (int i{1}; i < args_.size(); ++i) {
+        if (const auto it = args_[i].find('='); it != std::string::npos) {
+          const std::string param = args_[i].substr(0, it);
+          std::string value = args_[i].substr(it + 1);
+          declared_variables.insert_or_assign(param, value);
+        }
+        else {
+          declared_variables.insert_or_assign(args_[i], args_[i]);
+        }
+      }
     }
   }
   else if (command == "jobs") {
@@ -695,8 +722,11 @@ int main() {
 
   using_history();
 
-  auto hist_filename = *get_env_var("HISTFILE");
-  read_history(hist_filename.c_str());
+  auto hist_file_opt = get_env_var("HISTFILE");
+  if (hist_file_opt.has_value()) {
+    read_history(hist_file_opt->c_str());
+  }
+
 
   // TODO: Uncomment the code below to pass the first stage
   //REPL Read-Eval-Print-Loop
@@ -859,7 +889,7 @@ int main() {
       std::string command = pipeline_stages.front().args.front();
 
       if (command == "exit") {
-        write_history(hist_filename.c_str());
+        hist_append(hist_file_opt->c_str());
         should_exit_shell = true;
         break;
       }
