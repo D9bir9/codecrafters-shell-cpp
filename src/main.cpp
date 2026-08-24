@@ -409,7 +409,7 @@ static char* custom_path_generator(const char* text, const int state) {
         prev_word = cmd; // Default fallback to the command itself
       }
 
-      // 3. Build the full, standard arguments block: script command current_word prev_word
+      //Build arguments block: script command current_word prev_word
       const std::string exec_cmd = raw_script_path + " " +
                              wrap_string(cmd, '"') + " " +
                              wrap_string(current_word, '"') + " " +
@@ -806,37 +806,38 @@ int main() {
       continue;
     }
 
-    // Bash treats '&' as a command SEPARATOR/TERMINATOR, not something
-    // that only matters when it's the very last token on the line. Split
-    // the line into segments at every top-level '&': each segment before
-    // an '&' backgrounds independently, and a trailing segment with no
-    // '&' after it runs in the foreground as usual.
+    // '&' command SEPARATOR/TERMINATOR
+
     struct LineSegment {
       std::vector<std::string> tokens;
       bool is_in_background;
     };
     std::vector<LineSegment> segments;
     {
+      // Separate the line by '&'
+      // and assign a segment before the '&' symbol as a background job
       std::vector<std::string> current_segment;
       for (const auto& token : complete_args) {
         if (token == "&") {
+          // set is_in_background = true
           segments.push_back({.tokens = current_segment, .is_in_background = true});
           current_segment.clear();
         } else {
           current_segment.push_back(token);
         }
       }
-      // Anything left after the last '&' (or the whole line, if there was
-      // no '&' at all) runs in the foreground.
+      // Anything left after the last '&' or if there's no & runs in the foreground.
       if (!current_segment.empty() || segments.empty()) {
+        // set is_in_background == false;
         segments.push_back({current_segment, false});
       }
     }
 
+    // condition to exit shell;
     bool should_exit_shell = false;
 
     // validate every segment (pipe structure, redirection syntax)
-    // before executing ANY of them. Real bash parses the whole line first;
+    // before executing ANY of them.
     // a syntax error anywhere means nothing on the line runs at all -- so
     // "echo hi & &" must not background "echo hi" just because the error
     // is in the second segment.
@@ -846,16 +847,19 @@ int main() {
       bool is_in_background;
     };
     std::vector<ValidatedSegment> validated;
+    // condition to exit the loop if any segment of the line has an error;
     bool line_has_error = false;
 
     for (auto& segment : segments) {
       if (segment.tokens.empty()) {
+        // If there's nothing/empty space before or after &
         // e.g. "cmd &  & cmd2" or a bare leading "&" -- nothing to background.
         std::cout << "Shell: syntax error near unexpected token '&'\n";
         line_has_error = true;
         break;
       }
 
+      // Pipeline stages to divide each segment by '|'
       std::vector<CommandStage> pipeline_stages;
       CommandStage current_stage;
       bool abort = false;
@@ -891,6 +895,7 @@ int main() {
 
       bool syntax_error = false;
       for (auto& stage : pipeline_stages) {
+        // output redirection logic when there is > or 1> or >> or 1>> (i.e std::cout redirection) )or 2> or 2>> (i.e std::cerr redirection)
         if (auto err_it = std::ranges::find_if(stage.args.begin(), stage.args.end(), [](auto& a){ return a == "2>" || a == "2>>"; }); err_it != stage.args.end()) {
           stage.err_app = (*err_it == "2>>");
           stage.err_redir = true;
@@ -926,8 +931,11 @@ int main() {
           }
         }
         if (!stage.args.empty()) {
+          // Clear any leading or trailing white spaces from the command
+          // if line = "   echo      "     hello world;
+          // the tokenize logic doesn't clare white spaces when the line is wrapped in single quote or double qootes
+          // trim(stage.args[0] will trim the "    echo      " to "echo", so we can use if properly.
           trim(stage.args[0]);
-          // TODO: Expanding variables
         }
       }
 
@@ -936,10 +944,12 @@ int main() {
       validated.push_back({segment.tokens, std::move(pipeline_stages), segment.is_in_background});
     }
 
+    // if any error in line, we don't run the command and just std::cout the error to the console
     if (line_has_error) continue; // whole line rejected -- nothing executes, matching bash
 
-    // PASS 2: the line parsed cleanly end to end, so now actually run
+    // If no error: the line parsed cleanly end to end, so now actually run
     // each segment in order.
+    // since each segments is divided by &, we run them independently in order.
     for (auto& validated_segment : validated) {
       complete_args = validated_segment.raw_tokens;
       is_job = validated_segment.is_in_background;
